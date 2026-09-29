@@ -92,6 +92,18 @@ spec:
             - name: REDIS_HOST
               value: {{ . | quote }}
             {{- end }}
+            {{- if and (not .Values.redis.enabled) (or .Values.externalRedis.password .Values.externalRedis.existingSecret) }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.externalRedis.existingSecret }}
+                  name: {{ .Values.externalRedis.existingSecret }}
+                  key: {{ .Values.externalRedis.existingSecretKey }}
+                  {{- else }}
+                  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "redis") }}
+                  key: REDIS_PASSWORD
+                  {{- end }}
+            {{- end }}
             {{- with (include "kodbox.extraEnv" $sel | trim) }}
             {{- . | nindent 12 }}
             {{- end }}

@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.4.2
+version: 0.4.3
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -28,7 +28,9 @@ annotations:
       url: https://kodcloud.com
   artifacthub.io/changes: |
     - kind: added
-      description: app.persistence.annotations, e.g. for pvc-autoresizer automatic volume growth
+      description: externalRedis.password / existingSecret for password-protected external Redis
+    - kind: added
+      description: CI tests upgrades from the previous release and an external password-protected Redis
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc

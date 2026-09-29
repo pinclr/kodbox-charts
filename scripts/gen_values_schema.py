@@ -186,8 +186,11 @@ schema = {
             "resources": resources("Redis"),
             **sched("Redis"),
         }),
-        "externalRedis": obj("External Redis, used when redis.enabled=false. Empty host disables Redis.", {
+        "externalRedis": obj("External Redis, used when redis.enabled=false. Empty host disables Redis. Applied on kodbox's first start only; must listen on 6379.", {
             "host": s("Redis host."),
+            "password": s("Redis password."),
+            "existingSecret": s("Existing secret holding the Redis password."),
+            "existingSecretKey": s("Key of the password in existingSecret.", minLength=1),
         }),
         "kodoffice": obj("KodOffice document server. Browsers load it directly, so it needs a user-reachable URL.", {
             "enabled": b("Deploy KodOffice."),
