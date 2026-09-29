@@ -1,9 +1,8 @@
 # Artifact Hub repository metadata, copied to the root of gh-pages by the
 # release workflow. https://artifacthub.io/docs/topics/repositories/helm-charts/
-#
-# After adding the repository in Artifact Hub (Control Panel > Repositories),
-# paste its ID below to get the "Verified Publisher" badge.
-# repositoryID: 00000000-0000-0000-0000-000000000000
+
+# Artifact Hub repository ID ("Verified Publisher" badge)
+repositoryID: 6a10b84f-d8ca-44a2-ae88-3091fb1ad619
 
 # Owners listed here can claim the repository in Artifact Hub (email must match
 # their Artifact Hub account).
