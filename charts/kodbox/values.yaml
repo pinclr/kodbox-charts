@@ -11,8 +11,11 @@ imagePullSecrets: []
 ## Kodbox application (nginx + php-fpm, serves on port 80)
 app:
   image:
-    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/kodbox
-    tag: latest
+    # Versioned kodbox tags are published on Docker Hub.
+    repository: docker.io/kodcloud/kodbox
+    # Empty uses the chart's appVersion. Append a digest to pin a build:
+    # "1.68.10@sha256:...".
+    tag: ""
     pullPolicy: IfNotPresent
 
   # Replicas share the site/data volume (ReadWriteMany) and sessions in redis.

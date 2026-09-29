@@ -62,8 +62,7 @@
           },
           "additionalProperties": false,
           "required": [
-            "repository",
-            "tag"
+            "repository"
           ]
         },
         "replicaCount": {
@@ -311,8 +310,7 @@
           },
           "additionalProperties": false,
           "required": [
-            "repository",
-            "tag"
+            "repository"
           ]
         },
         "args": {
@@ -436,8 +434,7 @@
           },
           "additionalProperties": false,
           "required": [
-            "repository",
-            "tag"
+            "repository"
           ]
         },
         "args": {
@@ -559,8 +556,7 @@
           },
           "additionalProperties": false,
           "required": [
-            "repository",
-            "tag"
+            "repository"
           ]
         },
         "service": {
@@ -639,8 +635,7 @@
           },
           "additionalProperties": false,
           "required": [
-            "repository",
-            "tag"
+            "repository"
           ]
         },
         "port": {
@@ -727,8 +722,7 @@
               },
               "additionalProperties": false,
               "required": [
-                "repository",
-                "tag"
+                "repository"
               ]
             },
             "env": {
@@ -822,8 +816,7 @@
               },
               "additionalProperties": false,
               "required": [
-                "repository",
-                "tag"
+                "repository"
               ]
             },
             "rootUser": {
@@ -923,8 +916,7 @@
               },
               "additionalProperties": false,
               "required": [
-                "repository",
-                "tag"
+                "repository"
               ]
             },
             "mqType": {

@@ -11,10 +11,10 @@
 
 app:
   image:
-    # Pin a digest so every replica and restart runs the same build; kodbox only
-    # publishes a few versioned tags. Find it with:
-    #   skopeo inspect docker://registry.cn-hangzhou.aliyuncs.com/kodcloud/kodbox:latest
-    tag: latest # @sha256:...
+    # Empty uses the chart's appVersion. Pin a digest so every replica and
+    # restart runs the same build. Find it with:
+    #   skopeo inspect docker://docker.io/kodcloud/kodbox:1.68.10
+    tag: "" # e.g. "1.68.10@sha256:..."
     pullPolicy: IfNotPresent
 
   # Install with 1 (see above), then scale up.

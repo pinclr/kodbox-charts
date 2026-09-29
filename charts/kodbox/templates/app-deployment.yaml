@@ -32,7 +32,7 @@ spec:
       {{- end }}
       containers:
         - name: kodbox
-          image: {{ include "kodbox.image" .Values.app.image }}
+          image: {{ include "kodbox.image" (dict "repository" .Values.app.image.repository "tag" (.Values.app.image.tag | default .Chart.AppVersion)) }}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           env:
             - name: MYSQL_HOST

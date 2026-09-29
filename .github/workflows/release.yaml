@@ -33,6 +33,17 @@ jobs:
 
       - uses: azure/setup-helm@v4
 
+      # Packages are signed with the "pinclr Helm charts" GPG key; chart-releaser
+      # uploads the .prov provenance file next to each .tgz. Public key:
+      # signing-key.asc (fingerprint A0789F533FF3502789281476AA27ACFF8DC3E405).
+      - name: Prepare signing key
+        env:
+          GPG_KEYRING_BASE64: ${{ secrets.GPG_KEYRING_BASE64 }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_KEYRING_BASE64" | base64 -d > "$RUNNER_TEMP/secring.gpg"
+          printf '%s' "$GPG_PASSPHRASE" > "$RUNNER_TEMP/passphrase"
+
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.7.0
         with:
@@ -41,6 +52,10 @@ jobs:
         env:
           CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CR_GENERATE_RELEASE_NOTES: true
+          CR_SIGN: true
+          CR_KEY: pinclr Helm charts
+          CR_KEYRING: ${{ runner.temp }}/secring.gpg
+          CR_PASSPHRASE_FILE: ${{ runner.temp }}/passphrase
 
       # Artifact Hub reads artifacthub-repo.yml from the root of the Helm repo,
       # i.e. next to index.yaml on gh-pages.
