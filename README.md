@@ -1,5 +1,7 @@
 # kodbox-charts
 
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/kodbox)](https://artifacthub.io/packages/search?repo=kodbox)
+
 Helm charts for [kodbox](https://github.com/kalcaddle/kodbox).
 
 ```bash
