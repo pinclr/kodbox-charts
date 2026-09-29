@@ -1,0 +1,45 @@
+{{- /* helm test: checks the app (including a page that hits the database) and kodoffice respond. */}}
+{{- $app := include "kodbox.componentName" (dict "ctx" . "component" "app") }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "test") }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  containers:
+    - name: test
+      # The app image ships curl, so the test needs no extra image.
+      image: {{ include "kodbox.image" (dict "ctx" . "image" .Values.app.image "defaultTag" .Chart.AppVersion) }}
+      imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          check() {
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$2") || true
+            echo "$1: $2 -> $code"
+            case "$code" in 2??|3??) ;; *) exit 1 ;; esac
+          }
+          check "app" "http://{{ $app }}:{{ .Values.app.service.port }}/healthz.php"
+          check "app with database" "http://{{ $app }}:{{ .Values.app.service.port }}/"
+          {{- if .Values.kodoffice.enabled }}
+          check "kodoffice" "http://{{ include "kodbox.componentName" (dict "ctx" . "component" "kodoffice") }}:{{ .Values.kodoffice.service.port }}/healthcheck"
+          {{- end }}
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi

@@ -1,4 +1,4 @@
-name: Lint charts
+name: Lint and test charts
 
 on:
   pull_request:
@@ -10,6 +10,8 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.list-changed.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,9 +21,17 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12" # yamale in chart-testing breaks on 3.14
 
       - uses: helm/chart-testing-action@v2.7.0
+
+      - name: List changed charts
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --config ct.yaml --target-branch ${{ github.event.repository.default_branch }})
+          if [[ -n "$changed" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # Fails if a changed chart doesn't bump its Chart.yaml version, so every
       # merge to main produces a new release.
@@ -33,7 +43,43 @@ jobs:
           for chart in $(ct list-changed --config ct.yaml --target-branch ${{ github.event.repository.default_branch }}); do
             echo "::group::$chart"
             helm template ci "$chart" > /dev/null
-            helm template ci "$chart" --set gateway.enabled=true > /dev/null
-            helm template ci "$chart" --set ingress.enabled=true > /dev/null
+            helm template ci "$chart" -f "$chart/values-production.yaml" > /dev/null
+            helm template ci "$chart" --set gateway.enabled=true --set gateway.create=true --set gateway.tlsSecretName=tls > /dev/null
+            helm template ci "$chart" --set ingress.enabled=true --set milvus.enabled=true > /dev/null
+            echo "::endgroup::"
+          done
+
+  # Installs each changed chart on a throwaway kind cluster with its ci/*-values.yaml
+  # and runs `helm test`.
+  install:
+    needs: lint
+    if: needs.lint.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # yamale in chart-testing breaks on 3.14
+
+      - uses: helm/chart-testing-action@v2.7.0
+
+      - uses: helm/kind-action@v1.12.0
+
+      - name: Install changed charts and run helm test
+        run: ct install --config ct.yaml --target-branch ${{ github.event.repository.default_branch }}
+
+      - name: Show cluster state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide
+          kubectl get events -A --sort-by=.lastTimestamp | tail -50
+          for pod in $(kubectl get pods -A -l app.kubernetes.io/name=kodbox -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'); do
+            echo "::group::logs $pod"
+            kubectl logs -n "${pod%/*}" "${pod#*/}" --all-containers --tail=100 || true
             echo "::endgroup::"
           done
