@@ -5,6 +5,41 @@ entries:
       artifacthub.io/category: storage
       artifacthub.io/changes: |
         - kind: added
+          description: Chart icon
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/pinclr/kodbox-charts
+        - name: kodbox
+          url: https://kodcloud.com
+    apiVersion: v2
+    appVersion: 1.69.03
+    created: "2026-09-29T02:30:52.481739082Z"
+    description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
+    digest: ed1c32375cac16c52b7b2e17d8708abe59f593de836522634248137ff73ab459
+    home: https://github.com/pinclr/kodbox-charts
+    icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
+    keywords:
+    - kodbox
+    - file-manager
+    - cloud-storage
+    - office
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: pinclr
+      url: https://github.com/pinclr
+    name: kodbox
+    sources:
+    - https://github.com/pinclr/kodbox-charts
+    - https://github.com/kalcaddle/kodbox
+    type: application
+    urls:
+    - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.1/kodbox-0.1.1.tgz
+    version: 0.1.1
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |
+        - kind: added
           description: Initial release
       artifacthub.io/license: Apache-2.0
       artifacthub.io/links: |
@@ -35,4 +70,4 @@ entries:
     urls:
     - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.0/kodbox-0.1.0.tgz
     version: 0.1.0
-generated: "2026-09-29T02:23:13.620172762Z"
+generated: "2026-09-29T02:30:52.481749622Z"
