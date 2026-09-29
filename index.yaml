@@ -4,6 +4,46 @@ entries:
   - annotations:
       artifacthub.io/category: storage
       artifacthub.io/changes: |
+        - kind: changed
+          description: Default app image is docker.io/kodcloud/kodbox, tag defaults to appVersion (1.68.10)
+        - kind: added
+          description: Chart packages are GPG-signed
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/pinclr/kodbox-charts
+        - name: kodbox
+          url: https://kodcloud.com
+      artifacthub.io/signKey: |
+        fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
+        url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
+    apiVersion: v2
+    appVersion: 1.68.10
+    created: "2026-09-29T02:40:45.652609499Z"
+    description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
+    digest: 866daadcaf0a7a213f4a5ce208909b85c90f8dc5502a36980cb82803c18a466d
+    home: https://github.com/pinclr/kodbox-charts
+    icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
+    keywords:
+    - kodbox
+    - file-manager
+    - cloud-storage
+    - office
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: pinclr
+      url: https://github.com/pinclr
+    name: kodbox
+    sources:
+    - https://github.com/pinclr/kodbox-charts
+    - https://github.com/kalcaddle/kodbox
+    type: application
+    urls:
+    - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.2.0/kodbox-0.2.0.tgz
+    version: 0.2.0
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |
         - kind: added
           description: values.schema.json validating chart values
       artifacthub.io/license: Apache-2.0
@@ -105,4 +145,4 @@ entries:
     urls:
     - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.0/kodbox-0.1.0.tgz
     version: 0.1.0
-generated: "2026-09-29T02:34:23.422654664Z"
+generated: "2026-09-29T02:40:45.652625529Z"
