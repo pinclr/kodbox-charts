@@ -1,0 +1,1228 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "kodbox",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object",
+      "description": "Global values shared with parent charts (unused by this chart)."
+    },
+    "nameOverride": {
+      "type": "string",
+      "description": "Override the chart name used in resource names."
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "description": "Override the full resource name prefix."
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "description": "Image pull secrets for all pods.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "app": {
+      "type": "object",
+      "description": "Kodbox application (nginx + php-fpm, port 80).",
+      "properties": {
+        "image": {
+          "type": "object",
+          "description": "Container image for kodbox.",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "Image repository."
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ],
+              "description": "Image pull policy."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "tag"
+          ]
+        },
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "App replicas. Install with 1; more than 1 needs a ReadWriteMany volume."
+        },
+        "podAntiAffinity": {
+          "type": "string",
+          "enum": [
+            "soft",
+            "hard",
+            "none"
+          ],
+          "description": "Spread replicas across nodes. Ignored when app.affinity is set."
+        },
+        "pdb": {
+          "type": "object",
+          "description": "PodDisruptionBudget, created only when replicaCount > 1.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create the PodDisruptionBudget."
+            },
+            "minAvailable": {
+              "type": [
+                "integer",
+                "string"
+              ],
+              "description": "Minimum available pods (number or percentage)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "strategy": {
+          "type": "object",
+          "description": "Deployment update strategy.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "Recreate",
+                "RollingUpdate"
+              ],
+              "description": "Recreate for ReadWriteOnce volumes, RollingUpdate for ReadWriteMany."
+            },
+            "rollingUpdate": {
+              "type": "object",
+              "description": "RollingUpdate parameters (maxSurge, maxUnavailable)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "service": {
+          "type": "object",
+          "description": "App Service.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ],
+              "description": "Service type."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Service port."
+            }
+          },
+          "additionalProperties": false
+        },
+        "persistence": {
+          "type": "object",
+          "description": "Storage for the kodbox site and user files, mounted at /var/www/html.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Persist the kodbox site and user files on a PersistentVolumeClaim; false uses an emptyDir."
+            },
+            "storageClass": {
+              "type": "string",
+              "description": "Storage class; empty uses the cluster default."
+            },
+            "accessModes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "ReadWriteOnce",
+                  "ReadOnlyMany",
+                  "ReadWriteMany",
+                  "ReadWriteOncePod"
+                ]
+              },
+              "description": "PersistentVolumeClaim access modes."
+            },
+            "size": {
+              "type": "string",
+              "description": "Volume size for the kodbox site and user files.",
+              "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+            },
+            "existingClaim": {
+              "type": "string",
+              "description": "Use an existing PersistentVolumeClaim instead of creating one."
+            }
+          },
+          "additionalProperties": false
+        },
+        "extraEnv": {
+          "type": "array",
+          "description": "Extra environment variables for the app container.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "resources": {
+          "type": "object",
+          "description": "Kubernetes resource requests and limits for the app."
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Node labels for scheduling the app."
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Tolerations for the app pods."
+        },
+        "affinity": {
+          "type": "object",
+          "description": "Affinity rules for the app pods."
+        },
+        "podAnnotations": {
+          "type": "object",
+          "description": "Extra annotations for app pods."
+        }
+      },
+      "additionalProperties": false
+    },
+    "admin": {
+      "type": "object",
+      "description": "Initial kodbox admin account, applied only on the very first start.",
+      "properties": {
+        "bootstrap": {
+          "type": "boolean",
+          "description": "Create the admin account on first start; false lets the first visitor create it."
+        },
+        "username": {
+          "type": "string",
+          "description": "Admin username."
+        },
+        "password": {
+          "type": "string",
+          "description": "Admin password; empty generates one. 8+ characters using 3 of digits, upper, lower and ~!@#$%^&*; no \" $ ` or \\.",
+          "anyOf": [
+            {
+              "maxLength": 0
+            },
+            {
+              "minLength": 8,
+              "pattern": "^[^\"$`\\\\]*$"
+            }
+          ]
+        },
+        "existingSecret": {
+          "type": "string",
+          "description": "Existing secret with KODBOX_ADMIN_USER and KODBOX_ADMIN_PASSWORD."
+        }
+      },
+      "additionalProperties": false
+    },
+    "database": {
+      "type": "object",
+      "description": "Database credentials shared by the db and app containers.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Database name.",
+          "minLength": 1
+        },
+        "user": {
+          "type": "string",
+          "description": "Database user.",
+          "minLength": 1
+        },
+        "password": {
+          "type": "string",
+          "description": "Database password; empty generates one."
+        },
+        "rootPassword": {
+          "type": "string",
+          "description": "Database root password; empty generates one."
+        },
+        "existingSecret": {
+          "type": "string",
+          "description": "Existing secret with MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD and MYSQL_ROOT_PASSWORD."
+        }
+      },
+      "additionalProperties": false
+    },
+    "db": {
+      "type": "object",
+      "description": "Bundled MariaDB. Set enabled=false and fill externalDatabase to use your own.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy the bundled MariaDB."
+        },
+        "image": {
+          "type": "object",
+          "description": "Container image for MariaDB.",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "Image repository."
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ],
+              "description": "Image pull policy."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "tag"
+          ]
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra container arguments for MariaDB."
+        },
+        "service": {
+          "type": "object",
+          "description": "MariaDB Service.",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Service port."
+            }
+          },
+          "additionalProperties": false
+        },
+        "persistence": {
+          "type": "object",
+          "description": "Storage for MariaDB data, mounted at /var/lib/mysql.",
+          "properties": {
+            "storageClass": {
+              "type": "string",
+              "description": "Storage class; empty uses the cluster default."
+            },
+            "accessModes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "ReadWriteOnce",
+                  "ReadOnlyMany",
+                  "ReadWriteMany",
+                  "ReadWriteOncePod"
+                ]
+              },
+              "description": "PersistentVolumeClaim access modes."
+            },
+            "size": {
+              "type": "string",
+              "description": "Volume size for MariaDB data.",
+              "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "object",
+          "description": "Kubernetes resource requests and limits for MariaDB."
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Node labels for scheduling MariaDB."
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Tolerations for MariaDB pods."
+        },
+        "affinity": {
+          "type": "object",
+          "description": "Affinity rules for MariaDB pods."
+        }
+      },
+      "additionalProperties": false
+    },
+    "externalDatabase": {
+      "type": "object",
+      "description": "External MySQL/MariaDB, used when db.enabled=false.",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Database host."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Database port."
+        }
+      },
+      "additionalProperties": false
+    },
+    "redis": {
+      "type": "object",
+      "description": "Bundled Redis for kodbox sessions and cache.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy the bundled Redis."
+        },
+        "image": {
+          "type": "object",
+          "description": "Container image for Redis.",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "Image repository."
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ],
+              "description": "Image pull policy."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "tag"
+          ]
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra container arguments for redis-server."
+        },
+        "service": {
+          "type": "object",
+          "description": "Redis Service.",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Service port."
+            }
+          },
+          "additionalProperties": false
+        },
+        "persistence": {
+          "type": "object",
+          "description": "Storage for Redis append-only data, mounted at /data.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Persist Redis append-only data on a PersistentVolumeClaim; false uses an emptyDir."
+            },
+            "storageClass": {
+              "type": "string",
+              "description": "Storage class; empty uses the cluster default."
+            },
+            "accessModes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "ReadWriteOnce",
+                  "ReadOnlyMany",
+                  "ReadWriteMany",
+                  "ReadWriteOncePod"
+                ]
+              },
+              "description": "PersistentVolumeClaim access modes."
+            },
+            "size": {
+              "type": "string",
+              "description": "Volume size for Redis append-only data.",
+              "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "object",
+          "description": "Kubernetes resource requests and limits for Redis."
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Node labels for scheduling Redis."
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Tolerations for Redis pods."
+        },
+        "affinity": {
+          "type": "object",
+          "description": "Affinity rules for Redis pods."
+        }
+      },
+      "additionalProperties": false
+    },
+    "externalRedis": {
+      "type": "object",
+      "description": "External Redis, used when redis.enabled=false. Empty host disables Redis.",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Redis host."
+        }
+      },
+      "additionalProperties": false
+    },
+    "kodoffice": {
+      "type": "object",
+      "description": "KodOffice document server. Browsers load it directly, so it needs a user-reachable URL.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy KodOffice."
+        },
+        "image": {
+          "type": "object",
+          "description": "Container image for KodOffice.",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "Image repository."
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ],
+              "description": "Image pull policy."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "tag"
+          ]
+        },
+        "service": {
+          "type": "object",
+          "description": "KodOffice Service.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ],
+              "description": "Service type."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Service port."
+            }
+          },
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "object",
+          "description": "Kubernetes resource requests and limits for KodOffice."
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Node labels for scheduling KodOffice."
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Tolerations for KodOffice pods."
+        },
+        "affinity": {
+          "type": "object",
+          "description": "Affinity rules for KodOffice pods."
+        }
+      },
+      "additionalProperties": false
+    },
+    "imaginary": {
+      "type": "object",
+      "description": "Imaginary thumbnail / image processing service.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy Imaginary."
+        },
+        "image": {
+          "type": "object",
+          "description": "Container image for Imaginary.",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "Image repository."
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ],
+              "description": "Image pull policy."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "tag"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Container port."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra container arguments for Imaginary."
+        },
+        "service": {
+          "type": "object",
+          "description": "Imaginary Service.",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Service port."
+            }
+          },
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "object",
+          "description": "Kubernetes resource requests and limits for Imaginary."
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Node labels for scheduling Imaginary."
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Tolerations for Imaginary pods."
+        },
+        "affinity": {
+          "type": "object",
+          "description": "Affinity rules for Imaginary pods."
+        }
+      },
+      "additionalProperties": false
+    },
+    "milvus": {
+      "type": "object",
+      "description": "Milvus vector database stack (etcd + minio + milvus standalone) for AI search.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy etcd, minio and milvus."
+        },
+        "etcd": {
+          "type": "object",
+          "description": "etcd for Milvus metadata.",
+          "properties": {
+            "image": {
+              "type": "object",
+              "description": "Container image for etcd.",
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "description": "Image repository."
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Image tag, optionally with a digest (tag@sha256:...)."
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ],
+                  "description": "Image pull policy."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "repository",
+                "tag"
+              ]
+            },
+            "env": {
+              "type": "object",
+              "description": "Environment variables for etcd, as NAME: value.",
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "persistence": {
+              "type": "object",
+              "description": "Storage for etcd data, mounted at /etcd.",
+              "properties": {
+                "storageClass": {
+                  "type": "string",
+                  "description": "Storage class; empty uses the cluster default."
+                },
+                "accessModes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "ReadWriteOnce",
+                      "ReadOnlyMany",
+                      "ReadWriteMany",
+                      "ReadWriteOncePod"
+                    ]
+                  },
+                  "description": "PersistentVolumeClaim access modes."
+                },
+                "size": {
+                  "type": "string",
+                  "description": "Volume size for etcd data.",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "resources": {
+              "type": "object",
+              "description": "Kubernetes resource requests and limits for etcd."
+            },
+            "nodeSelector": {
+              "type": "object",
+              "description": "Node labels for scheduling etcd."
+            },
+            "tolerations": {
+              "type": "array",
+              "description": "Tolerations for etcd pods."
+            },
+            "affinity": {
+              "type": "object",
+              "description": "Affinity rules for etcd pods."
+            }
+          },
+          "additionalProperties": false
+        },
+        "minio": {
+          "type": "object",
+          "description": "MinIO object storage for Milvus segments.",
+          "properties": {
+            "image": {
+              "type": "object",
+              "description": "Container image for MinIO.",
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "description": "Image repository."
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Image tag, optionally with a digest (tag@sha256:...)."
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ],
+                  "description": "Image pull policy."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "repository",
+                "tag"
+              ]
+            },
+            "rootUser": {
+              "type": "string",
+              "description": "MinIO root user.",
+              "minLength": 3
+            },
+            "rootPassword": {
+              "type": "string",
+              "description": "MinIO root password; empty generates one. At least 8 characters.",
+              "anyOf": [
+                {
+                  "maxLength": 0
+                },
+                {
+                  "minLength": 8
+                }
+              ]
+            },
+            "persistence": {
+              "type": "object",
+              "description": "Storage for MinIO data, mounted at /minio_data.",
+              "properties": {
+                "storageClass": {
+                  "type": "string",
+                  "description": "Storage class; empty uses the cluster default."
+                },
+                "accessModes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "ReadWriteOnce",
+                      "ReadOnlyMany",
+                      "ReadWriteMany",
+                      "ReadWriteOncePod"
+                    ]
+                  },
+                  "description": "PersistentVolumeClaim access modes."
+                },
+                "size": {
+                  "type": "string",
+                  "description": "Volume size for MinIO data.",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "resources": {
+              "type": "object",
+              "description": "Kubernetes resource requests and limits for MinIO."
+            },
+            "nodeSelector": {
+              "type": "object",
+              "description": "Node labels for scheduling MinIO."
+            },
+            "tolerations": {
+              "type": "array",
+              "description": "Tolerations for MinIO pods."
+            },
+            "affinity": {
+              "type": "object",
+              "description": "Affinity rules for MinIO pods."
+            }
+          },
+          "additionalProperties": false
+        },
+        "standalone": {
+          "type": "object",
+          "description": "Milvus standalone server.",
+          "properties": {
+            "image": {
+              "type": "object",
+              "description": "Container image for Milvus.",
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "description": "Image repository."
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Image tag, optionally with a digest (tag@sha256:...)."
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ],
+                  "description": "Image pull policy."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "repository",
+                "tag"
+              ]
+            },
+            "mqType": {
+              "type": "string",
+              "enum": [
+                "woodpecker",
+                "rocksmq",
+                "pulsar",
+                "kafka"
+              ],
+              "description": "Milvus message queue."
+            },
+            "service": {
+              "type": "object",
+              "description": "Milvus Service.",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "ClusterIP",
+                    "NodePort",
+                    "LoadBalancer"
+                  ],
+                  "description": "Service type."
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535,
+                  "description": "gRPC port."
+                },
+                "metricsPort": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535,
+                  "description": "Metrics / health port."
+                }
+              },
+              "additionalProperties": false
+            },
+            "persistence": {
+              "type": "object",
+              "description": "Storage for Milvus data, mounted at /var/lib/milvus.",
+              "properties": {
+                "storageClass": {
+                  "type": "string",
+                  "description": "Storage class; empty uses the cluster default."
+                },
+                "accessModes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "ReadWriteOnce",
+                      "ReadOnlyMany",
+                      "ReadWriteMany",
+                      "ReadWriteOncePod"
+                    ]
+                  },
+                  "description": "PersistentVolumeClaim access modes."
+                },
+                "size": {
+                  "type": "string",
+                  "description": "Volume size for Milvus data.",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "resources": {
+              "type": "object",
+              "description": "Kubernetes resource requests and limits for Milvus."
+            },
+            "nodeSelector": {
+              "type": "object",
+              "description": "Node labels for scheduling Milvus."
+            },
+            "tolerations": {
+              "type": "array",
+              "description": "Tolerations for Milvus pods."
+            },
+            "affinity": {
+              "type": "object",
+              "description": "Affinity rules for Milvus pods."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "networkPolicy": {
+      "type": "object",
+      "description": "NetworkPolicies restricting access to the backing services.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create the NetworkPolicies."
+        },
+        "milvusExtraFrom": {
+          "type": "array",
+          "description": "Extra NetworkPolicy 'from' peers allowed to reach Milvus."
+        }
+      },
+      "additionalProperties": false
+    },
+    "gateway": {
+      "type": "object",
+      "description": "Gateway API routing (HTTPRoutes, optionally a dedicated Gateway).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create HTTPRoutes."
+        },
+        "parentRefs": {
+          "type": "array",
+          "description": "Existing Gateway listeners to attach to (when create=false).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "httpsRedirect": {
+          "type": "object",
+          "description": "HTTP to HTTPS redirect routes.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Attach a redirect route to the Gateway's HTTP listener."
+            },
+            "sectionName": {
+              "type": "string",
+              "description": "HTTP listener name on the existing Gateway."
+            }
+          },
+          "additionalProperties": false
+        },
+        "create": {
+          "type": "boolean",
+          "description": "Deploy a dedicated Gateway instead of attaching to an existing one."
+        },
+        "className": {
+          "type": "string",
+          "description": "GatewayClass for the dedicated Gateway."
+        },
+        "gatewayAnnotations": {
+          "type": "object",
+          "description": "Annotations for the dedicated Gateway."
+        },
+        "tlsSecretName": {
+          "type": "string",
+          "description": "TLS secret for the dedicated Gateway's HTTPS listeners."
+        },
+        "routeAnnotations": {
+          "type": "object",
+          "description": "Annotations for the HTTPRoutes."
+        },
+        "app": {
+          "type": "object",
+          "description": "Kodbox route.",
+          "properties": {
+            "hostnames": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "hostname"
+              },
+              "minItems": 1,
+              "description": "Hostnames for kodbox."
+            }
+          },
+          "additionalProperties": false
+        },
+        "kodoffice": {
+          "type": "object",
+          "description": "KodOffice route.",
+          "properties": {
+            "hostnames": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "hostname"
+              },
+              "description": "Hostnames for KodOffice; [] skips the route."
+            }
+          },
+          "additionalProperties": false
+        },
+        "timeouts": {
+          "type": "object",
+          "description": "HTTPRoute rule timeouts.",
+          "properties": {
+            "request": {
+              "type": "string",
+              "description": "Gateway API request timeout, e.g. 3600s."
+            },
+            "backendRequest": {
+              "type": "string",
+              "description": "Gateway API backendRequest timeout."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "ingress": {
+      "type": "object",
+      "description": "Ingress routing, for clusters with an Ingress controller.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create the Ingress."
+        },
+        "className": {
+          "type": "string",
+          "description": "IngressClass name."
+        },
+        "annotations": {
+          "type": "object",
+          "description": "Ingress annotations."
+        },
+        "app": {
+          "type": "object",
+          "description": "Kodbox host.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Hostname for kodbox."
+            }
+          },
+          "additionalProperties": false
+        },
+        "kodoffice": {
+          "type": "object",
+          "description": "KodOffice host.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Hostname for KodOffice; empty skips it."
+            }
+          },
+          "additionalProperties": false
+        },
+        "tls": {
+          "type": "array",
+          "description": "Ingress TLS entries.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "secretName": {
+                "type": "string"
+              },
+              "hosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "db": {
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "externalDatabase": {
+            "properties": {
+              "host": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
