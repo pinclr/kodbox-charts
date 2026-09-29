@@ -1,0 +1,110 @@
+{{- if .Values.db.enabled }}
+{{- $sel := dict "ctx" . "component" "db" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+spec:
+  selector:
+    {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
+  ports:
+    - name: mysql
+      port: {{ .Values.db.service.port }}
+      targetPort: mysql
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+spec:
+  serviceName: {{ include "kodbox.componentName" $sel }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" $sel | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mariadb
+          image: {{ include "kodbox.image" .Values.db.image }}
+          imagePullPolicy: {{ .Values.db.image.pullPolicy }}
+          {{- with .Values.db.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: MARIADB_AUTO_UPGRADE
+              value: "1"
+            - name: MARIADB_DISABLE_UPGRADE_BACKUP
+              value: "1"
+          envFrom:
+            - secretRef:
+                name: {{ include "kodbox.dbSecretName" . }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+          # healthcheck.sh ships with the MariaDB image.
+          startupProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect"]
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          {{- with .Values.db.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.db.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.db.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.db.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  # Keep data volumes when the StatefulSet is deleted or scaled down.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.db.persistence.accessModes | nindent 10 }}
+        {{- with .Values.db.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.db.persistence.size }}
+{{- end }}

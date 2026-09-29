@@ -1,0 +1,79 @@
+{{- if .Values.imaginary.enabled }}
+{{- $sel := dict "ctx" . "component" "imaginary" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: imaginary
+spec:
+  selector:
+    {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.imaginary.service.port }}
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: imaginary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" $sel | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: imaginary
+          image: {{ include "kodbox.image" .Values.imaginary.image }}
+          imagePullPolicy: {{ .Values.imaginary.image.pullPolicy }}
+          {{- with .Values.imaginary.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: PORT
+              value: {{ .Values.imaginary.port | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.imaginary.port }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          {{- with .Values.imaginary.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.imaginary.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imaginary.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imaginary.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,63 @@
+name: Release charts
+
+# Publishes every chart whose Chart.yaml version has no release yet:
+# a GitHub Release (tag <chart>-<version>) with the packaged .tgz, plus an
+# updated index.yaml on gh-pages, served at https://pinclr.github.io/kodbox-charts
+on:
+  push:
+    branches: [main]
+    paths:
+      - "charts/**"
+      - "artifacthub-repo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-charts
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - uses: azure/setup-helm@v4
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
+        with:
+          charts_dir: charts
+          skip_existing: true
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CR_GENERATE_RELEASE_NOTES: true
+
+      # Artifact Hub reads artifacthub-repo.yml from the root of the Helm repo,
+      # i.e. next to index.yaml on gh-pages.
+      - name: Sync artifacthub-repo.yml to gh-pages
+        run: |
+          if ! grep -qv '^\s*\(#\|$\)' artifacthub-repo.yml; then
+            echo "artifacthub-repo.yml has no settings yet, skipping"
+            exit 0
+          fi
+          git fetch origin gh-pages
+          git worktree add ../gh-pages origin/gh-pages
+          cp artifacthub-repo.yml ../gh-pages/artifacthub-repo.yml
+          cd ../gh-pages
+          if git diff --quiet --exit-code -- artifacthub-repo.yml && git ls-files --error-unmatch artifacthub-repo.yml >/dev/null 2>&1; then
+            echo "artifacthub-repo.yml unchanged"
+            exit 0
+          fi
+          git add artifacthub-repo.yml
+          git commit -m "Update artifacthub-repo.yml"
+          git push origin HEAD:gh-pages

@@ -1,0 +1,48 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $rules := list }}
+{{- if .Values.db.enabled }}
+{{- $rules = append $rules (dict "target" "db" "from" (list "app") "ports" (list 3306)) }}
+{{- end }}
+{{- if .Values.redis.enabled }}
+{{- $rules = append $rules (dict "target" "redis" "from" (list "app") "ports" (list 6379)) }}
+{{- end }}
+{{- if .Values.imaginary.enabled }}
+{{- $rules = append $rules (dict "target" "imaginary" "from" (list "app") "ports" (list (int .Values.imaginary.port))) }}
+{{- end }}
+{{- if .Values.milvus.enabled }}
+{{- $rules = append $rules (dict "target" "etcd" "from" (list "milvus") "ports" (list 2379)) }}
+{{- $rules = append $rules (dict "target" "minio" "from" (list "milvus") "ports" (list 9000)) }}
+{{- $rules = append $rules (dict "target" "milvus" "from" (list "app") "ports" (list 19530 9091) "extraFrom" .Values.networkPolicy.milvusExtraFrom) }}
+{{- end }}
+{{- range $rules }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "kodbox.componentName" (dict "ctx" $ "component" .target) }}
+  labels:
+    {{- include "kodbox.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ .target }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" (dict "ctx" $ "component" .target) | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- range .from }}
+        - podSelector:
+            matchLabels:
+              {{- include "kodbox.selectorLabels" (dict "ctx" $ "component" .) | nindent 14 }}
+        {{- end }}
+        {{- with .extraFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        {{- range .ports }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+{{- end }}
+{{- end }}

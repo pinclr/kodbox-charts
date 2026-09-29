@@ -1,0 +1,113 @@
+{{- if .Values.milvus.enabled }}
+{{- $sel := dict "ctx" . "component" "minio" }}
+{{- $v := .Values.milvus.minio }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio
+spec:
+  selector:
+    {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
+  ports:
+    - name: api
+      port: 9000
+      targetPort: api
+    - name: console
+      port: 9001
+      targetPort: console
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio
+spec:
+  serviceName: {{ include "kodbox.componentName" $sel }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" $sel | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+      annotations:
+        checksum/milvus-secret: {{ toYaml .Values.milvus.minio | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: minio
+          image: {{ include "kodbox.image" $v.image }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
+                  key: MINIO_ROOT_PASSWORD
+          ports:
+            - name: api
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: api
+            periodSeconds: 30
+            timeoutSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: api
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /minio_data
+          {{- with $v.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  # Keep data volumes when the StatefulSet is deleted or scaled down.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml $v.persistence.accessModes | nindent 10 }}
+        {{- with $v.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $v.persistence.size }}
+{{- end }}

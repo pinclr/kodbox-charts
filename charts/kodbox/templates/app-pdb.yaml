@@ -1,0 +1,14 @@
+{{- if and .Values.app.pdb.enabled (gt (int .Values.app.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "app") }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  minAvailable: {{ .Values.app.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" (dict "ctx" . "component" "app") | nindent 6 }}
+{{- end }}

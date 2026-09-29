@@ -1,0 +1,135 @@
+{{- $sel := dict "ctx" . "component" "app" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  replicas: {{ .Values.app.replicaCount }}
+  strategy:
+    {{- toYaml .Values.app.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" $sel | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+      annotations:
+        # Checksum the configured values, not the rendered secret: generated
+        # passwords are re-randomised on every render at install time.
+        checksum/db-secret: {{ toYaml .Values.database | sha256sum }}
+        checksum/healthz: {{ include (print $.Template.BasePath "/app-configmap.yaml") . | sha256sum }}
+        {{- with .Values.app.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: kodbox
+          image: {{ include "kodbox.image" .Values.app.image }}
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          env:
+            - name: MYSQL_HOST
+              value: {{ include "kodbox.dbHost" . | quote }}
+            - name: MYSQL_PORT
+              value: {{ include "kodbox.dbPort" . | quote }}
+            {{- with (include "kodbox.redisHost" .) }}
+            - name: REDIS_HOST
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ include "kodbox.dbSecretName" . }}
+            {{- if .Values.admin.bootstrap }}
+            # Read by the image only when it installs kodbox into an empty volume.
+            - secretRef:
+                name: {{ include "kodbox.adminSecretName" . }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 80
+          # healthz.php exercises nginx + php-fpm without touching the database.
+          # First start copies the kodbox source and runs the installer before
+          # nginx starts, so allow up to 10 minutes.
+          startupProbe:
+            httpGet:
+              path: /healthz.php
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz.php
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz.php
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: site
+              mountPath: /var/www/html
+            # The image's entrypoint detects installs via config/version.php,
+            # so this file in an empty volume doesn't block first-start setup.
+            - name: healthz
+              mountPath: /var/www/html/healthz.php
+              subPath: healthz.php
+              readOnly: true
+          {{- with .Values.app.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: site
+          {{- if .Values.app.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.app.persistence.existingClaim | default (include "kodbox.componentName" $sel) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: healthz
+          configMap:
+            name: {{ include "kodbox.componentName" $sel }}
+      {{- with .Values.app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.app.affinity }}
+      affinity:
+        {{- toYaml .Values.app.affinity | nindent 8 }}
+      {{- else if eq .Values.app.podAntiAffinity "hard" }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  {{- include "kodbox.selectorLabels" $sel | nindent 18 }}
+      {{- else if eq .Values.app.podAntiAffinity "soft" }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "kodbox.selectorLabels" $sel | nindent 20 }}
+      {{- end }}
+      {{- with .Values.app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

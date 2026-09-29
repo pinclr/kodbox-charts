@@ -1,0 +1,84 @@
+{{- if .Values.kodoffice.enabled }}
+{{- $sel := dict "ctx" . "component" "kodoffice" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kodoffice
+spec:
+  type: {{ .Values.kodoffice.service.type }}
+  selector:
+    {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.kodoffice.service.port }}
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kodoffice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" $sel | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: kodoffice
+          image: {{ include "kodbox.image" .Values.kodoffice.image }}
+          imagePullPolicy: {{ .Values.kodoffice.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          startupProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          # The document server briefly returns 502 while its internal services
+          # restart, so tolerate a few failures before restarting the pod.
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          {{- with .Values.kodoffice.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.kodoffice.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.kodoffice.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.kodoffice.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,20 @@
+{{- if and .Values.app.persistence.enabled (not .Values.app.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "app") }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    {{- toYaml .Values.app.persistence.accessModes | nindent 4 }}
+  {{- with .Values.app.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.app.persistence.size }}
+{{- end }}

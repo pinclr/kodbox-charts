@@ -1,0 +1,148 @@
+{{- if .Values.milvus.enabled }}
+{{- $sel := dict "ctx" . "component" "milvus" }}
+{{- $v := .Values.milvus.standalone }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: milvus
+spec:
+  type: {{ $v.service.type }}
+  selector:
+    {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ $v.service.port }}
+      targetPort: grpc
+    - name: metrics
+      port: {{ $v.service.metricsPort }}
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: milvus
+spec:
+  serviceName: {{ include "kodbox.componentName" $sel }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" $sel | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+      annotations:
+        checksum/milvus-secret: {{ toYaml .Values.milvus.minio | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        seccompProfile:
+          type: Unconfined
+      # Milvus panics if etcd is unreachable at startup, so wait for its deps.
+      initContainers:
+        - name: wait-for-deps
+          image: {{ include "kodbox.image" $v.image }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until curl -sf http://{{ include "kodbox.componentName" (dict "ctx" . "component" "etcd") }}:2379/health >/dev/null; do echo "waiting for etcd"; sleep 3; done
+              until curl -sf http://{{ include "kodbox.componentName" (dict "ctx" . "component" "minio") }}:9000/minio/health/ready >/dev/null; do echo "waiting for minio"; sleep 3; done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      containers:
+        - name: milvus
+          image: {{ include "kodbox.image" $v.image }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command: ["milvus", "run", "standalone"]
+          env:
+            - name: ETCD_ENDPOINTS
+              value: {{ include "kodbox.componentName" (dict "ctx" . "component" "etcd") }}:2379
+            - name: MINIO_ADDRESS
+              value: {{ include "kodbox.componentName" (dict "ctx" . "component" "minio") }}:9000
+            - name: MQ_TYPE
+              value: {{ $v.mqType | quote }}
+          ports:
+            - name: grpc
+              containerPort: 19530
+            - name: metrics
+              containerPort: 9091
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 30
+            timeoutSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/milvus
+            - name: config
+              mountPath: /milvus/configs/user.yaml
+              subPath: user.yaml
+              readOnly: true
+          {{- with $v.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ include "kodbox.componentName" $sel }}
+            items:
+              - key: user.yaml
+                path: user.yaml
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  # Keep data volumes when the StatefulSet is deleted or scaled down.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml $v.persistence.accessModes | nindent 10 }}
+        {{- with $v.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $v.persistence.size }}
+{{- end }}

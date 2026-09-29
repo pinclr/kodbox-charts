@@ -1,0 +1,40 @@
+Kodbox has been deployed.
+
+{{- if .Values.gateway.enabled }}
+Open: https://{{ first .Values.gateway.app.hostnames }}
+{{- else if .Values.ingress.enabled }}
+Open: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.app.host }}
+{{- else }}
+Access locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kodbox.componentName" (dict "ctx" . "component" "app") }} 8088:{{ .Values.app.service.port }}
+  then open http://127.0.0.1:8088
+{{- end }}
+
+On first start kodbox installs itself against the configured database and
+redis.
+{{- if .Values.admin.bootstrap }}
+The admin account is created on that first start (existing installs are not
+changed):
+  user:     kubectl -n {{ .Release.Namespace }} get secret {{ include "kodbox.adminSecretName" . }} -o jsonpath='{.data.KODBOX_ADMIN_USER}' | base64 -d
+  password: kubectl -n {{ .Release.Namespace }} get secret {{ include "kodbox.adminSecretName" . }} -o jsonpath='{.data.KODBOX_ADMIN_PASSWORD}' | base64 -d
+{{- else }}
+The admin account is NOT set yet: the first person to open the site
+creates it, so open it and set the admin password right away.
+{{- end }}
+
+Database (for reference / backups):
+  host:     {{ include "kodbox.dbHost" . }}:{{ include "kodbox.dbPort" . }}
+  database: {{ .Values.database.name }}
+  user:     {{ .Values.database.user }}
+  password: kubectl -n {{ .Release.Namespace }} get secret {{ include "kodbox.dbSecretName" . }} -o jsonpath='{.data.MYSQL_PASSWORD}' | base64 -d
+
+In-cluster endpoints to configure in the kodbox admin panel / plugins:
+{{- if .Values.kodoffice.enabled }}
+  kodoffice: {{ if and .Values.gateway.enabled .Values.gateway.kodoffice.hostnames }}https://{{ first .Values.gateway.kodoffice.hostnames }}{{ else if .Values.ingress.kodoffice.host }}http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.kodoffice.host }}{{ else }}(not exposed - set ingress.kodoffice.host; browsers must reach it){{ end }}
+{{- end }}
+{{- if .Values.imaginary.enabled }}
+  imaginary: http://{{ include "kodbox.componentName" (dict "ctx" . "component" "imaginary") }}:{{ .Values.imaginary.service.port }}
+{{- end }}
+{{- if .Values.milvus.enabled }}
+  milvus:    {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}:{{ .Values.milvus.standalone.service.port }}
+{{- end }}

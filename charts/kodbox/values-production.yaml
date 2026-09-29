@@ -1,0 +1,145 @@
+# Example production values: two app replicas on a shared ReadWriteMany volume,
+# sized for a team, exposed through a Gateway API gateway with TLS, with Milvus
+# for AI search. Only overrides are listed; everything else comes from values.yaml.
+#
+#   helm install kodbox kodbox/kodbox -n kodbox --create-namespace \
+#     -f values-production.yaml --set app.replicaCount=1
+#   # wait for the first start to finish, then:
+#   helm upgrade kodbox kodbox/kodbox -n kodbox -f values-production.yaml
+#
+# Replace the storage classes, hostnames, gateway and secrets with your own.
+
+app:
+  image:
+    # Pin a digest so every replica and restart runs the same build; kodbox only
+    # publishes a few versioned tags. Find it with:
+    #   skopeo inspect docker://registry.cn-hangzhou.aliyuncs.com/kodcloud/kodbox:latest
+    tag: latest # @sha256:...
+    pullPolicy: IfNotPresent
+
+  # Install with 1 (see above), then scale up.
+  replicaCount: 2
+  podAntiAffinity: soft
+  pdb:
+    enabled: true
+    minAvailable: 1
+  strategy:
+    type: RollingUpdate
+
+  persistence:
+    # Replicas share the site/data volume, so it must be ReadWriteMany
+    # (CephFS, NFS, EFS, Azure Files, ...).
+    storageClass: ceph-filesystem
+    accessModes:
+      - ReadWriteMany
+    size: 250Gi
+
+  extraEnv:
+    - name: TZ
+      value: UTC
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+
+admin:
+  # Pre-created secret with KODBOX_ADMIN_USER and KODBOX_ADMIN_PASSWORD, so the
+  # credentials live outside the release (e.g. from External Secrets / Sealed Secrets).
+  existingSecret: kodbox-admin
+
+database:
+  # Pre-created secret with MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD and
+  # MYSQL_ROOT_PASSWORD. Keeps the data reachable if the release is reinstalled.
+  existingSecret: kodbox-db
+
+db:
+  persistence:
+    # Block storage (RWO) for MariaDB. Empty uses the cluster default.
+    storageClass: ""
+    size: 50Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+
+# External HA database instead of the bundled single MariaDB, e.g. a managed
+# service (Aliyun RDS, AWS RDS, Cloud SQL) or an operator-run cluster
+# (mariadb-operator with replication + failover). Replace the db block above
+# with the lines below. The database and user must already exist; kodbox
+# connects as MYSQL_USER from database.existingSecret. Match the bundled
+# server's settings: InnoDB, utf8mb4, transaction_isolation=READ-COMMITTED.
+#
+# db:
+#   enabled: false
+#
+# externalDatabase:
+#   # Writer / primary endpoint (for mariadb-operator: the primary Service,
+#   # e.g. mariadb-primary.databases.svc.cluster.local)
+#   host: kodbox-db.xxxxxxxx.rds.aliyuncs.com
+#   port: 3306
+
+redis:
+  persistence:
+    enabled: true
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+kodoffice:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "8"
+      memory: 16Gi
+
+imaginary:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+
+milvus:
+  enabled: true
+  minio:
+    persistence:
+      size: 50Gi
+  standalone:
+    persistence:
+      size: 20Gi
+
+networkPolicy:
+  enabled: true
+
+gateway:
+  enabled: true
+  # Attach to an existing shared Gateway that terminates TLS (e.g. a wildcard cert).
+  parentRefs:
+    - name: shared-gateway
+      namespace: gateway
+      sectionName: https
+  httpsRedirect:
+    enabled: true
+    sectionName: http
+  app:
+    hostnames:
+      - kodbox.example.com
+  kodoffice:
+    hostnames:
+      - kodoffice.example.com

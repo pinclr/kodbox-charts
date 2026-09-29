@@ -1,0 +1,39 @@
+name: Lint charts
+
+on:
+  pull_request:
+    paths:
+      - "charts/**"
+      - "ct.yaml"
+      - ".github/workflows/lint.yaml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - uses: helm/chart-testing-action@v2.7.0
+
+      # Fails if a changed chart doesn't bump its Chart.yaml version, so every
+      # merge to main produces a new release.
+      - name: Lint changed charts
+        run: ct lint --config ct.yaml --target-branch ${{ github.event.repository.default_branch }}
+
+      - name: Render changed charts
+        run: |
+          for chart in $(ct list-changed --config ct.yaml --target-branch ${{ github.event.repository.default_branch }}); do
+            echo "::group::$chart"
+            helm template ci "$chart" > /dev/null
+            helm template ci "$chart" --set gateway.enabled=true > /dev/null
+            helm template ci "$chart" --set ingress.enabled=true > /dev/null
+            echo "::endgroup::"
+          done

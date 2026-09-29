@@ -1,0 +1,361 @@
+# Default values for the kodbox chart.
+# Mirrors the reference docker-compose install (db, app, redis, kodoffice, imaginary)
+# as a minimal single-replica, non-HA setup on the cluster's default storage class.
+# See values-production.yaml for a multi-replica production example.
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+## Kodbox application (nginx + php-fpm, serves on port 80)
+app:
+  image:
+    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/kodbox
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  # Replicas share the site/data volume (ReadWriteMany) and sessions in redis.
+  # Install with 1 replica so the first-start copy into the volume runs once,
+  # then scale up (needs a ReadWriteMany volume, see values-production.yaml).
+  replicaCount: 1
+
+  # Spread replicas across nodes: soft (preferred), hard (required) or none.
+  # Ignored when app.affinity is set.
+  podAntiAffinity: soft
+
+  # PodDisruptionBudget, only created when replicaCount > 1
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+  # Recreate for a ReadWriteOnce volume (the new pod can't attach it while the
+  # old one runs); RollingUpdate works with ReadWriteMany.
+  strategy:
+    type: Recreate
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  persistence:
+    enabled: true
+    # Mounted at /var/www/html (compose: ./site): kodbox source and user files.
+    # Empty storageClass uses the cluster default.
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    existingClaim: ""
+
+  # Extra environment variables for the app container
+  extraEnv: []
+  #  - name: TZ
+  #    value: Asia/Shanghai
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+
+## Initial kodbox admin account, applied only on the very first start (when the
+## image installs kodbox into an empty volume). Afterwards manage the admin in
+## the kodbox UI; changing these values won't change an existing admin.
+admin:
+  bootstrap: true
+  username: admin
+  # Left empty, a random password is generated on install and kept across upgrades.
+  # Must meet kodbox's default rule: 8+ chars using 3 of digits, upper, lower,
+  # ~!@#$%^&*. Avoid " $ ` and \ (the image passes it through a shell).
+  password: ""
+  # Use a pre-created secret with keys KODBOX_ADMIN_USER and KODBOX_ADMIN_PASSWORD.
+  existingSecret: ""
+
+## Database credentials shared by the db and app containers (compose: db.env)
+database:
+  name: kodbox
+  user: kodbox
+  # Left empty, random passwords are generated on install and kept across upgrades.
+  password: ""
+  rootPassword: ""
+  # Use a pre-created secret with keys MYSQL_DATABASE, MYSQL_USER,
+  # MYSQL_PASSWORD and MYSQL_ROOT_PASSWORD instead of the chart's secret.
+  existingSecret: ""
+
+## Bundled MariaDB. Set enabled=false and fill externalDatabase to use your own.
+db:
+  enabled: true
+  image:
+    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/mariadb
+    tag: lts
+    pullPolicy: IfNotPresent
+  args:
+    - --transaction-isolation=READ-COMMITTED
+  service:
+    port: 3306
+  persistence:
+    # Mounted at /var/lib/mysql (compose: ./db)
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 4Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+externalDatabase:
+  host: ""
+  port: 3306
+
+## Bundled Redis (kodbox sessions and cache)
+redis:
+  enabled: true
+  image:
+    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/redis
+    tag: alpine
+    pullPolicy: IfNotPresent
+  # Append-only file so sessions survive redis restarts.
+  args:
+    - --appendonly
+    - "yes"
+    - --appendfsync
+    - everysec
+  service:
+    port: 6379
+  persistence:
+    enabled: true
+    # Mounted at /data. Empty storageClass uses the cluster default.
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+externalRedis:
+  host: ""
+
+## KodOffice document server. Browsers load it directly, so it needs a
+## user-reachable URL (see ingress.kodoffice).
+kodoffice:
+  enabled: true
+  image:
+    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/kodoffice
+    tag: 7.4.1.1
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+## Imaginary thumbnail/image processing service (called server-side by kodbox)
+imaginary:
+  enabled: true
+  image:
+    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/imaginary
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 9000
+  args:
+    - -enable-url-source
+    - -concurrency
+    - "10"
+    - -max-allowed-resolution
+    - "500"
+  service:
+    port: 9000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+## Milvus vector database stack (etcd + minio + milvus standalone), mirroring
+## the milvus docker-compose shipped with the install. Only needed for kodbox's
+## AI / semantic search features, so off by default.
+milvus:
+  enabled: false
+
+  etcd:
+    image:
+      repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/etcd
+      tag: v3.5.25
+      pullPolicy: IfNotPresent
+    env:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    persistence:
+      storageClass: ""
+      accessModes:
+        - ReadWriteOnce
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
+  minio:
+    image:
+      repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/minio
+      tag: RELEASE.2024-12-18T13-15-44Z
+      pullPolicy: IfNotPresent
+    rootUser: minioadmin
+    # Left empty, a random password is generated on install and kept across upgrades.
+    rootPassword: ""
+    persistence:
+      storageClass: ""
+      accessModes:
+        - ReadWriteOnce
+      size: 50Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
+  standalone:
+    image:
+      repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/milvus
+      tag: v2.6.7
+      pullPolicy: IfNotPresent
+    mqType: woodpecker
+    service:
+      type: ClusterIP
+      port: 19530
+      metricsPort: 9091
+    persistence:
+      storageClass: ""
+      accessModes:
+        - ReadWriteOnce
+      size: 20Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 2Gi
+      limits:
+        cpu: "4"
+        memory: 8Gi
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
+## NetworkPolicies restricting who can reach the backing services:
+## db/redis/imaginary from the app, etcd/minio from milvus, milvus from the app.
+## The app and kodoffice stay open because the gateway proxies to them.
+networkPolicy:
+  enabled: true
+  # Extra peers allowed to reach milvus (e.g. other in-cluster AI services),
+  # as NetworkPolicy "from" entries.
+  milvusExtraFrom: []
+  #  - namespaceSelector:
+  #      matchLabels:
+  #        kubernetes.io/metadata.name: ai
+
+## Gateway API routing (use instead of ingress on clusters with a Gateway
+## controller, e.g. Cilium). HTTPRoutes attach to an existing shared Gateway by
+## default; set gateway.create=true to deploy a dedicated Gateway instead.
+gateway:
+  enabled: false
+
+  # Existing Gateway listeners to attach to (used when create=false)
+  parentRefs:
+    - name: gateway
+      namespace: gateway
+      sectionName: https
+
+  # Also attach a route to the Gateway's plain-HTTP listener that redirects to HTTPS
+  httpsRedirect:
+    enabled: true
+    sectionName: http
+
+  # Dedicated Gateway (used when create=true)
+  create: false
+  className: cilium
+  gatewayAnnotations: {}
+  # TLS certificate secret for the dedicated Gateway's HTTPS listener
+  tlsSecretName: ""
+
+  # Annotations for the HTTPRoutes
+  routeAnnotations: {}
+
+  app:
+    hostnames:
+      - kodbox.example.com
+  kodoffice:
+    # Browsers load kodoffice directly, so it needs its own public hostname.
+    # Set to [] to skip routing kodoffice through the gateway.
+    hostnames:
+      - kodoffice.example.com
+
+  # Optional HTTPRoute rule timeouts (Gateway API "request"/"backendRequest").
+  # Gateway implementations may also have their own idle timeouts (e.g. Cilium's
+  # cluster-wide envoy.streamIdleTimeoutDurationSeconds, 5 minutes by default).
+  timeouts: {}
+  #  request: 3600s
+  #  backendRequest: 3600s
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # Kodbox handles large uploads; raise the ingress body limit accordingly.
+    # nginx.ingress.kubernetes.io/proxy-body-size: "0"
+  app:
+    host: kodbox.example.com
+  kodoffice:
+    # Leave empty to skip exposing kodoffice through the ingress.
+    host: ""
+  tls: []
+  #  - secretName: kodbox-tls
+  #    hosts:
+  #      - kodbox.example.com

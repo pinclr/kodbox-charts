@@ -1,0 +1,103 @@
+{{- if .Values.milvus.enabled }}
+{{- $sel := dict "ctx" . "component" "etcd" }}
+{{- $v := .Values.milvus.etcd }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: etcd
+spec:
+  selector:
+    {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
+  ports:
+    - name: client
+      port: 2379
+      targetPort: client
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: etcd
+spec:
+  serviceName: {{ include "kodbox.componentName" $sel }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" $sel | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: etcd
+          image: {{ include "kodbox.image" $v.image }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command:
+            - etcd
+            - -advertise-client-urls=http://{{ include "kodbox.componentName" $sel }}:2379
+            - -listen-client-urls=http://0.0.0.0:2379
+            - --data-dir=/etcd
+          env:
+            {{- range $k, $val := $v.env }}
+            - name: {{ $k }}
+              value: {{ $val | quote }}
+            {{- end }}
+          ports:
+            - name: client
+              containerPort: 2379
+          livenessProbe:
+            exec:
+              command: ["etcdctl", "endpoint", "health"]
+            periodSeconds: 30
+            timeoutSeconds: 20
+          readinessProbe:
+            exec:
+              command: ["etcdctl", "endpoint", "health"]
+            periodSeconds: 10
+            timeoutSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /etcd
+          {{- with $v.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  # Keep data volumes when the StatefulSet is deleted or scaled down.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml $v.persistence.accessModes | nindent 10 }}
+        {{- with $v.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $v.persistence.size }}
+{{- end }}
