@@ -4,6 +4,9 @@
 kodoffice:
   enabled: false
 
+# Exercises the TZ env and the PHP date.timezone mount.
+timezone: Asia/Shanghai
+
 app:
   resources:
     requests:

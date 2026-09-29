@@ -92,8 +92,8 @@ spec:
             - name: REDIS_HOST
               value: {{ . | quote }}
             {{- end }}
-            {{- with .Values.app.extraEnv }}
-            {{- toYaml . | nindent 12 }}
+            {{- with (include "kodbox.extraEnv" $sel | trim) }}
+            {{- . | nindent 12 }}
             {{- end }}
           envFrom:
             - secretRef:
@@ -137,6 +137,12 @@ spec:
               mountPath: /var/www/html/healthz.php
               subPath: healthz.php
               readOnly: true
+            {{- if .Values.timezone }}
+            - name: healthz
+              mountPath: /usr/local/etc/php/conf.d/zz-timezone.ini
+              subPath: zz-timezone.ini
+              readOnly: true
+            {{- end }}
           {{- with .Values.app.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

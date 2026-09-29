@@ -52,8 +52,8 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.imaginary.port | quote }}
-            {{- with .Values.imaginary.extraEnv }}
-            {{- toYaml . | nindent 12 }}
+            {{- with (include "kodbox.extraEnv" $sel | trim) }}
+            {{- . | nindent 12 }}
             {{- end }}
           ports:
             - name: http

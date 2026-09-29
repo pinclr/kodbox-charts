@@ -82,8 +82,8 @@ spec:
               value: {{ include "kodbox.componentName" (dict "ctx" . "component" "minio") }}:9000
             - name: MQ_TYPE
               value: {{ $v.mqType | quote }}
-            {{- with $v.extraEnv }}
-            {{- toYaml . | nindent 12 }}
+            {{- with (include "kodbox.extraEnv" $sel | trim) }}
+            {{- . | nindent 12 }}
             {{- end }}
           ports:
             - name: grpc

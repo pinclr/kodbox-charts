@@ -8,6 +8,10 @@ global:
   # repository paths). Overrides each image's registry.
   imageRegistry: ""
 
+# IANA time zone for every component, e.g. Asia/Shanghai: sets TZ in each
+# container and PHP's date.timezone for kodbox. Empty keeps the images' UTC.
+timezone: ""
+
 nameOverride: ""
 fullnameOverride: ""
 

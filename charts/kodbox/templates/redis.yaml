@@ -53,9 +53,9 @@ spec:
             {{- with .Values.redis.args }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with .Values.redis.extraEnv }}
+          {{- with (include "kodbox.extraEnv" $sel | trim) }}
           env:
-            {{- toYaml . | nindent 12 }}
+            {{- . | nindent 12 }}
           {{- end }}
           ports:
             - name: redis
