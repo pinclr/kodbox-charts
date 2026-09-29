@@ -2,10 +2,11 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "1.69.03"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
+icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
 sources:
   - https://github.com/pinclr/kodbox-charts
   - https://github.com/kalcaddle/kodbox
@@ -27,4 +28,4 @@ annotations:
       url: https://kodcloud.com
   artifacthub.io/changes: |
     - kind: added
-      description: Initial release
+      description: Chart icon
