@@ -62,6 +62,8 @@ def sched(what):
         "priorityClassName": s(f"PriorityClass for {what} pods."),
         "topologySpreadConstraints": free(f"Topology spread constraints for {what} pods; a missing labelSelector is filled with the pod's labels.", "array"),
         "extraEnv": ENV | {"description": f"Extra environment variables for the {what} container."},
+        "podSecurityContext": free(f"Pod security context for {what} pods."),
+        "securityContext": free(f"Container security context for {what} containers."),
     }
 
 
@@ -109,11 +111,25 @@ schema = {
             "description": "Image pull secrets for all pods.",
             "items": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
         },
+        "serviceAccount": obj("ServiceAccount shared by all pods.", {
+            "create": b("Create the ServiceAccount."),
+            "name": s("ServiceAccount name; defaults to the release's full name, or \"default\" when create=false."),
+            "annotations": free("ServiceAccount annotations."),
+            "automountServiceAccountToken": b("Mount the API token into pods; no component needs it."),
+        }),
         "app": obj("Kodbox application (nginx + php-fpm, port 80).", {
             "image": image("kodbox"),
             "replicaCount": {"type": "integer", "minimum": 0, "description": "App replicas. Install with 1; more than 1 needs a ReadWriteMany volume."},
             "podAntiAffinity": {"type": "string", "enum": ["soft", "hard", "none"], "description": "Spread replicas across nodes. Ignored when app.affinity is set."},
-            "pdb": obj("PodDisruptionBudget, created only when replicaCount > 1.", {
+            "autoscaling": obj("HorizontalPodAutoscaler for the app (needs metrics-server); replaces replicaCount.", {
+                "enabled": b("Create the HorizontalPodAutoscaler."),
+                "minReplicas": {"type": "integer", "minimum": 1, "description": "Minimum replicas."},
+                "maxReplicas": {"type": "integer", "minimum": 1, "description": "Maximum replicas."},
+                "targetCPUUtilizationPercentage": {"type": ["integer", "string"], "pattern": "^$", "minimum": 1, "description": "Average CPU utilization target (% of requests); empty disables."},
+                "targetMemoryUtilizationPercentage": {"type": ["integer", "string"], "pattern": "^$", "minimum": 1, "description": "Average memory utilization target (% of requests); empty disables."},
+                "behavior": free("HPA scaling behavior (scaleUp / scaleDown policies)."),
+            }),
+            "pdb": obj("PodDisruptionBudget, created only when more than one replica must run.", {
                 "enabled": b("Create the PodDisruptionBudget."),
                 "minAvailable": {"type": ["integer", "string"], "description": "Minimum available pods (number or percentage)."},
             }),

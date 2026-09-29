@@ -13,6 +13,15 @@ fullnameOverride: ""
 
 imagePullSecrets: []
 
+## ServiceAccount shared by all pods. None of the components use the
+## Kubernetes API, so its token isn't mounted.
+serviceAccount:
+  create: true
+  # Defaults to the release's full name (or "default" when create=false).
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
 ## Kodbox application (nginx + php-fpm, serves on port 80)
 app:
   image:
@@ -34,7 +43,19 @@ app:
   # Ignored when app.affinity is set.
   podAntiAffinity: soft
 
-  # PodDisruptionBudget, only created when replicaCount > 1
+  # HorizontalPodAutoscaler (needs metrics-server). Replaces replicaCount and,
+  # like replicaCount > 1, needs a ReadWriteMany volume and redis. Enable it
+  # after the first start has finished.
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: ""
+    # HPA scaling behavior (scaleUp / scaleDown policies)
+    behavior: {}
+
+  # PodDisruptionBudget, only created when more than one replica must run
   pdb:
     enabled: true
     minAvailable: 1
@@ -84,6 +105,15 @@ app:
 
   # Wait for the database and redis to accept connections before starting.
   waitForDependencies: true
+
+  # Pod and container security contexts. Every component defaults to the
+  # RuntimeDefault seccomp profile (Pod Security "baseline" compatible). The
+  # kodcloud images start as root and drop privileges themselves, so check an
+  # image before adding runAsNonRoot or dropping capabilities.
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext: {}
 
 
 ## Initial kodbox admin account, applied only on the very first start (when the
@@ -144,6 +174,10 @@ db:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext: {}
 
 externalDatabase:
   host: ""
@@ -188,6 +222,12 @@ redis:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    # The redis user (uid 999, gid 1000) must be able to write the volume.
+    fsGroup: 1000
+  securityContext: {}
 
 externalRedis:
   host: ""
@@ -220,6 +260,10 @@ kodoffice:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext: {}
 
 ## Imaginary thumbnail/image processing service (called server-side by kodbox)
 imaginary:
@@ -254,6 +298,10 @@ imaginary:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext: {}
 
 ## Milvus vector database stack (etcd + minio + milvus standalone), mirroring
 ## the milvus docker-compose shipped with the install. Only needed for kodbox's
@@ -271,13 +319,14 @@ milvus:
     env:
       ETCD_AUTO_COMPACTION_MODE: revision
       ETCD_AUTO_COMPACTION_RETENTION: "1000"
-      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      # 2 GiB, well inside the volume so the quota alarm fires before the disk fills.
+      ETCD_QUOTA_BACKEND_BYTES: "2147483648"
       ETCD_SNAPSHOT_COUNT: "50000"
     persistence:
       storageClass: ""
       accessModes:
         - ReadWriteOnce
-      size: 5Gi
+      size: 4Gi
     resources:
       requests:
         cpu: 100m
@@ -293,6 +342,10 @@ milvus:
     priorityClassName: ""
     topologySpreadConstraints: []
     extraEnv: []
+    podSecurityContext:
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext: {}
 
   minio:
     image:
@@ -308,7 +361,7 @@ milvus:
       storageClass: ""
       accessModes:
         - ReadWriteOnce
-      size: 50Gi
+      size: 8Gi
     resources:
       requests:
         cpu: 100m
@@ -324,6 +377,10 @@ milvus:
     priorityClassName: ""
     topologySpreadConstraints: []
     extraEnv: []
+    podSecurityContext:
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext: {}
 
   standalone:
     image:
@@ -341,7 +398,7 @@ milvus:
       storageClass: ""
       accessModes:
         - ReadWriteOnce
-      size: 20Gi
+      size: 8Gi
     resources:
       requests:
         cpu: 500m
@@ -357,6 +414,10 @@ milvus:
     priorityClassName: ""
     topologySpreadConstraints: []
     extraEnv: []
+    podSecurityContext:
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext: {}
 
 ## NetworkPolicies restricting who can reach the backing services:
 ## db/redis/imaginary from the app, etcd/minio from milvus, milvus from the app.

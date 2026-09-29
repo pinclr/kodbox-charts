@@ -1,0 +1,14 @@
+# Second CI install: Milvus (etcd + minio + milvus standalone) on top of the
+# core services, to check the Milvus stack starts under the Pod Security
+# "baseline" standard with the RuntimeDefault seccomp profile.
+kodoffice:
+  enabled: false
+
+milvus:
+  enabled: true
+
+app:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi

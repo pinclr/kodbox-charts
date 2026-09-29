@@ -37,6 +37,29 @@
         ]
       }
     },
+    "serviceAccount": {
+      "type": "object",
+      "description": "ServiceAccount shared by all pods.",
+      "properties": {
+        "create": {
+          "type": "boolean",
+          "description": "Create the ServiceAccount."
+        },
+        "name": {
+          "type": "string",
+          "description": "ServiceAccount name; defaults to the release's full name, or \"default\" when create=false."
+        },
+        "annotations": {
+          "type": "object",
+          "description": "ServiceAccount annotations."
+        },
+        "automountServiceAccountToken": {
+          "type": "boolean",
+          "description": "Mount the API token into pods; no component needs it."
+        }
+      },
+      "additionalProperties": false
+    },
     "app": {
       "type": "object",
       "description": "Kodbox application (nginx + php-fpm, port 80).",
@@ -94,9 +117,52 @@
           ],
           "description": "Spread replicas across nodes. Ignored when app.affinity is set."
         },
+        "autoscaling": {
+          "type": "object",
+          "description": "HorizontalPodAutoscaler for the app (needs metrics-server); replaces replicaCount.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create the HorizontalPodAutoscaler."
+            },
+            "minReplicas": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Minimum replicas."
+            },
+            "maxReplicas": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum replicas."
+            },
+            "targetCPUUtilizationPercentage": {
+              "type": [
+                "integer",
+                "string"
+              ],
+              "pattern": "^$",
+              "minimum": 1,
+              "description": "Average CPU utilization target (% of requests); empty disables."
+            },
+            "targetMemoryUtilizationPercentage": {
+              "type": [
+                "integer",
+                "string"
+              ],
+              "pattern": "^$",
+              "minimum": 1,
+              "description": "Average memory utilization target (% of requests); empty disables."
+            },
+            "behavior": {
+              "type": "object",
+              "description": "HPA scaling behavior (scaleUp / scaleDown policies)."
+            }
+          },
+          "additionalProperties": false
+        },
         "pdb": {
           "type": "object",
-          "description": "PodDisruptionBudget, created only when replicaCount > 1.",
+          "description": "PodDisruptionBudget, created only when more than one replica must run.",
           "properties": {
             "enabled": {
               "type": "boolean",
@@ -241,6 +307,14 @@
             ]
           },
           "description": "Extra environment variables for the the app container."
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod security context for the app pods."
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Container security context for the app containers."
         }
       },
       "additionalProperties": false
@@ -449,6 +523,14 @@
             ]
           },
           "description": "Extra environment variables for the MariaDB container."
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod security context for MariaDB pods."
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Container security context for MariaDB containers."
         }
       },
       "additionalProperties": false
@@ -617,6 +699,14 @@
             ]
           },
           "description": "Extra environment variables for the Redis container."
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod security context for Redis pods."
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Container security context for Redis containers."
         }
       },
       "additionalProperties": false
@@ -747,6 +837,14 @@
             ]
           },
           "description": "Extra environment variables for the KodOffice container."
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod security context for KodOffice pods."
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Container security context for KodOffice containers."
         }
       },
       "additionalProperties": false
@@ -870,6 +968,14 @@
             ]
           },
           "description": "Extra environment variables for the Imaginary container."
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod security context for Imaginary pods."
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Container security context for Imaginary containers."
         }
       },
       "additionalProperties": false
@@ -1012,6 +1118,14 @@
                 ]
               },
               "description": "Extra environment variables for the etcd container."
+            },
+            "podSecurityContext": {
+              "type": "object",
+              "description": "Pod security context for etcd pods."
+            },
+            "securityContext": {
+              "type": "object",
+              "description": "Container security context for etcd containers."
             }
           },
           "additionalProperties": false
@@ -1152,6 +1266,14 @@
                 ]
               },
               "description": "Extra environment variables for the MinIO container."
+            },
+            "podSecurityContext": {
+              "type": "object",
+              "description": "Pod security context for MinIO pods."
+            },
+            "securityContext": {
+              "type": "object",
+              "description": "Container security context for MinIO containers."
             }
           },
           "additionalProperties": false
@@ -1313,6 +1435,14 @@
                 ]
               },
               "description": "Extra environment variables for the Milvus container."
+            },
+            "podSecurityContext": {
+              "type": "object",
+              "description": "Pod security context for Milvus pods."
+            },
+            "securityContext": {
+              "type": "object",
+              "description": "Container security context for Milvus containers."
             }
           },
           "additionalProperties": false

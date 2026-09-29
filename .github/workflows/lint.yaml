@@ -49,8 +49,8 @@ jobs:
             echo "::endgroup::"
           done
 
-  # Installs each changed chart on a throwaway kind cluster with its ci/*-values.yaml
-  # and runs `helm test`.
+  # Installs each changed chart on a throwaway kind cluster, once per
+  # ci/*-values.yaml, and runs `helm test`.
   install:
     needs: lint
     if: needs.lint.outputs.changed == 'true'
@@ -70,14 +70,24 @@ jobs:
 
       - uses: helm/kind-action@v1.12.0
 
+      # Pods must pass the Pod Security "baseline" standard; "restricted"
+      # violations are only reported as warnings.
+      - name: Create namespace enforcing Pod Security baseline
+        run: |
+          kubectl create namespace kodbox-ci
+          kubectl label namespace kodbox-ci \
+            pod-security.kubernetes.io/enforce=baseline \
+            pod-security.kubernetes.io/warn=restricted
+
       - name: Install changed charts and run helm test
-        run: ct install --config ct.yaml --target-branch ${{ github.event.repository.default_branch }}
+        run: ct install --config ct.yaml --namespace kodbox-ci --target-branch ${{ github.event.repository.default_branch }}
 
       - name: Show cluster state on failure
         if: failure()
         run: |
           kubectl get pods -A -o wide
           kubectl get events -A --sort-by=.lastTimestamp | tail -50
+          kubectl -n kodbox-ci get replicasets,statefulsets -o wide
           for pod in $(kubectl get pods -A -l app.kubernetes.io/name=kodbox -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'); do
             echo "::group::logs $pod"
             kubectl logs -n "${pod%/*}" "${pod#*/}" --all-containers --tail=100 || true

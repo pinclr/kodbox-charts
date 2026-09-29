@@ -42,6 +42,14 @@ app.kubernetes.io/component: {{ .component }}
 {{- default (printf "%s-db" (include "kodbox.fullname" .)) .Values.database.existingSecret }}
 {{- end }}
 
+{{- define "kodbox.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create }}
+{{- default (include "kodbox.fullname" .) .Values.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
 {{- define "kodbox.adminSecretName" -}}
 {{- default (printf "%s-admin" (include "kodbox.fullname" .)) .Values.admin.existingSecret }}
 {{- end }}
@@ -101,12 +109,19 @@ starts with a registry host (e.g. "quay.io/org/img") is used as-is.
 {{- end }}
 
 {{/*
-Pod spec settings shared by every component: pull secrets, priority class and
-scheduling. Call with (dict "ctx" $ "component" "app" "v" .Values.app), plus
-"affinity" to replace v.affinity. Topology spread constraints without a
-labelSelector get the component's selector labels.
+Pod spec settings shared by every component: service account, security
+context, pull secrets, priority class and scheduling. Call with
+(dict "ctx" $ "component" "app" "v" .Values.app), plus "affinity" to replace
+v.affinity. Topology spread constraints without a labelSelector get the
+component's selector labels.
 */}}
 {{- define "kodbox.podScheduling" -}}
+serviceAccountName: {{ include "kodbox.serviceAccountName" .ctx }}
+automountServiceAccountToken: {{ .ctx.Values.serviceAccount.automountServiceAccountToken }}
+{{- with .v.podSecurityContext }}
+securityContext:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 {{- with .ctx.Values.imagePullSecrets }}
 imagePullSecrets:
   {{- toYaml . | nindent 2 }}
@@ -142,19 +157,28 @@ topologySpreadConstraints:
 {{/* Fails the render on value combinations that deploy but can't work. */}}
 {{- define "kodbox.validate" -}}
 {{- $app := .Values.app }}
-{{- $replicas := int $app.replicaCount }}
+{{- $as := $app.autoscaling }}
+{{- if and $as.enabled (lt (int $as.maxReplicas) (int $as.minReplicas)) }}
+{{- fail "app.autoscaling.maxReplicas must be at least minReplicas" }}
+{{- end }}
+{{- if and $as.enabled (not $as.targetCPUUtilizationPercentage) (not $as.targetMemoryUtilizationPercentage) }}
+{{- fail "app.autoscaling needs targetCPUUtilizationPercentage and/or targetMemoryUtilizationPercentage" }}
+{{- end }}
+{{- /* Checks below use the most replicas that can run, and the fewest that must. */}}
+{{- $replicas := ternary (int $as.maxReplicas) (int $app.replicaCount) (and $as.enabled true) }}
+{{- $minReplicas := ternary (int $as.minReplicas) (int $app.replicaCount) (and $as.enabled true) }}
 {{- if gt $replicas 1 }}
 {{- if not $app.persistence.enabled }}
-{{- fail "app.replicaCount > 1 needs app.persistence.enabled=true: replicas must share one volume" }}
+{{- fail "more than one app replica (replicaCount or autoscaling) needs app.persistence.enabled=true: replicas must share one volume" }}
 {{- end }}
 {{- if and (not $app.persistence.existingClaim) (not (has "ReadWriteMany" $app.persistence.accessModes)) }}
-{{- fail "app.replicaCount > 1 needs a ReadWriteMany volume: set app.persistence.accessModes=[ReadWriteMany] with a storage class that supports it (see values-production.yaml)" }}
+{{- fail "more than one app replica (replicaCount or autoscaling) needs a ReadWriteMany volume: set app.persistence.accessModes=[ReadWriteMany] with a storage class that supports it (see values-production.yaml)" }}
 {{- end }}
 {{- if not (include "kodbox.redisHost" .) }}
-{{- fail "app.replicaCount > 1 needs redis for shared sessions: enable redis or set externalRedis.host" }}
+{{- fail "more than one app replica (replicaCount or autoscaling) needs redis for shared sessions: enable redis or set externalRedis.host" }}
 {{- end }}
-{{- if and $app.pdb.enabled (not (kindIs "string" $app.pdb.minAvailable)) (ge (int $app.pdb.minAvailable) $replicas) }}
-{{- fail "app.pdb.minAvailable must be lower than app.replicaCount, or node drains are blocked" }}
+{{- if and $app.pdb.enabled (gt $minReplicas 1) (not (kindIs "string" $app.pdb.minAvailable)) (ge (int $app.pdb.minAvailable) $minReplicas) }}
+{{- fail "app.pdb.minAvailable must be lower than app.replicaCount (or autoscaling.minReplicas), or node drains are blocked" }}
 {{- end }}
 {{- end }}
 {{- end }}

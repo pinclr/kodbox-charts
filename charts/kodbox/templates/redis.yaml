@@ -38,13 +38,14 @@ spec:
       {{- end }}
     spec:
       {{- include "kodbox.podScheduling" $sel | nindent 6 }}
-      # The redis user (uid 999, gid 1000) must be able to write the volume.
-      securityContext:
-        fsGroup: 1000
       containers:
         - name: redis
           image: {{ include "kodbox.image" (dict "ctx" $ "image" .Values.redis.image) }}
           imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          {{- with .Values.redis.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           # Leading "redis-server" lets the image's entrypoint fix /data ownership
           # and drop privileges; bare "--flag" args skip that.
           args:
