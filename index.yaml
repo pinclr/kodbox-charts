@@ -4,6 +4,54 @@ entries:
   - annotations:
       artifacthub.io/category: storage
       artifacthub.io/changes: |
+        - kind: added
+          description: global.imageRegistry and per-image registry / digest
+        - kind: changed
+          description: image.repository no longer includes the registry (a repository with a registry host is still used as-is)
+        - kind: added
+          description: podAnnotations, podLabels, priorityClassName, topologySpreadConstraints and extraEnv for every component
+        - kind: added
+          description: App waits for the database and redis before its first start
+        - kind: added
+          description: Render fails on unsafe combinations (multiple replicas without a shared volume or redis, blocking PDB)
+        - kind: added
+          description: helm test and a CI test install on kind
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/pinclr/kodbox-charts
+        - name: kodbox
+          url: https://kodcloud.com
+      artifacthub.io/signKey: |
+        fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
+        url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
+    apiVersion: v2
+    appVersion: 1.68.10
+    created: "2026-09-29T03:23:36.989130567Z"
+    description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
+    digest: cfae91206cd50ad1932b2c6178be2b001a86854da4c8ca2cf197c0d15f12d43f
+    home: https://github.com/pinclr/kodbox-charts
+    icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
+    keywords:
+    - kodbox
+    - file-manager
+    - cloud-storage
+    - office
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: pinclr
+      url: https://github.com/pinclr
+    name: kodbox
+    sources:
+    - https://github.com/pinclr/kodbox-charts
+    - https://github.com/kalcaddle/kodbox
+    type: application
+    urls:
+    - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.3.0/kodbox-0.3.0.tgz
+    version: 0.3.0
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |
         - kind: changed
           description: Default app image is docker.io/kodcloud/kodbox, tag defaults to appVersion (1.68.10)
         - kind: added
@@ -145,4 +193,4 @@ entries:
     urls:
     - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.0/kodbox-0.1.0.tgz
     version: 0.1.0
-generated: "2026-09-29T02:40:45.652625529Z"
+generated: "2026-09-29T03:23:36.989144828Z"
