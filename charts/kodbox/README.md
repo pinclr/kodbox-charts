@@ -251,8 +251,20 @@ pin them before upgrading:
 --set milvus.standalone.persistence.size=20Gi
 ```
 
-To grow a volume, expand the PVC itself (`kubectl edit pvc`, if the storage
-class allows expansion) and set the same size in values.
+To grow a volume, the storage class needs `allowVolumeExpansion: true`.
+Volumes can grow but never shrink.
+
+- **App volume:** a plain PVC, so raise `app.persistence.size` and upgrade.
+- **StatefulSet volumes** (db, redis, etcd, minio, milvus): expand the PVC
+  itself (`kubectl edit pvc data-<release>-db-0`) and set the same size in values.
+
+**Automatic growth:** Kubernetes can't grow volumes by itself; an add-on such as
+[pvc-autoresizer](https://github.com/topolvm/pvc-autoresizer) can, based on
+Prometheus volume metrics. It needs `resize.topolvm.io/enabled: "true"` on the
+storage class and annotations on each PVC. For the app volume set them in
+`app.persistence.annotations` (commented out in `values-production.yaml`); for
+StatefulSet volumes use `kubectl annotate pvc`. After it grows a volume, raise
+the size in values to match: an upgrade to a smaller size than the live one fails.
 
 ## Network policies
 

@@ -258,6 +258,10 @@
             "existingClaim": {
               "type": "string",
               "description": "Use an existing PersistentVolumeClaim instead of creating one."
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Extra PVC annotations, e.g. for pvc-autoresizer."
             }
           },
           "additionalProperties": false

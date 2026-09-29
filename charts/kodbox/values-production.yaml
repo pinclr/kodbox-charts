@@ -42,6 +42,14 @@ app:
     accessModes:
       - ReadWriteMany
     size: 250Gi
+    # Automatic growth with pvc-autoresizer (https://github.com/topolvm/pvc-autoresizer).
+    # Needs Prometheus with kubelet volume metrics, allowVolumeExpansion on the
+    # storage class and the annotation resize.topolvm.io/enabled: "true" on it.
+    # After a resize, raise size above to the new value before lowering anything.
+    # annotations:
+    #   resize.topolvm.io/threshold: "10%"      # grow when free space drops below 10%
+    #   resize.topolvm.io/increase: "20%"       # by 20% of the current size
+    #   resize.topolvm.io/storage_limit: 1Ti    # never beyond 1Ti
 
   resources:
     requests:

@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.4.1
+version: 0.4.2
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -28,9 +28,7 @@ annotations:
       url: https://kodcloud.com
   artifacthub.io/changes: |
     - kind: added
-      description: timezone value setting TZ for every component and PHP's date.timezone for kodbox
-    - kind: changed
-      description: Production example uses Beijing time (Asia/Shanghai)
+      description: app.persistence.annotations, e.g. for pvc-autoresizer automatic volume growth
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
