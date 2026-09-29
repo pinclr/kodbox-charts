@@ -141,6 +141,7 @@ schema = {
             "service": obj("App Service.", {"type": SERVICE_TYPE, "port": port("Service port.")}),
             "persistence": persistence("the kodbox site and user files", "/var/www/html", toggle=True, extra={
                 "existingClaim": s("Use an existing PersistentVolumeClaim instead of creating one."),
+                "annotations": free("Extra PVC annotations, e.g. for pvc-autoresizer."),
             }),
             "waitForDependencies": b("Wait for the database and redis to accept connections before starting kodbox."),
             "resources": resources("the app"),

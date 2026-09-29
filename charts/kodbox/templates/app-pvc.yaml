@@ -8,6 +8,9 @@ metadata:
     app.kubernetes.io/component: app
   annotations:
     helm.sh/resource-policy: keep
+    {{- with .Values.app.persistence.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   accessModes:
     {{- toYaml .Values.app.persistence.accessModes | nindent 4 }}
