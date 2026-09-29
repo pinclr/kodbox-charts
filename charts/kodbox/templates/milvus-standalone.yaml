@@ -44,14 +44,15 @@ spec:
         {{- end }}
     spec:
       {{- include "kodbox.podScheduling" $sel | nindent 6 }}
-      securityContext:
-        seccompProfile:
-          type: Unconfined
       # Milvus panics if etcd is unreachable at startup, so wait for its deps.
       initContainers:
         - name: wait-for-deps
           image: {{ include "kodbox.image" (dict "ctx" $ "image" $v.image) }}
           imagePullPolicy: {{ $v.image.pullPolicy }}
+          {{- with $v.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - sh
             - -c
@@ -69,6 +70,10 @@ spec:
         - name: milvus
           image: {{ include "kodbox.image" (dict "ctx" $ "image" $v.image) }}
           imagePullPolicy: {{ $v.image.pullPolicy }}
+          {{- with $v.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["milvus", "run", "standalone"]
           env:
             - name: ETCD_ENDPOINTS

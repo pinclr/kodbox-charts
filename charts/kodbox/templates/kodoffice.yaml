@@ -42,6 +42,10 @@ spec:
         - name: kodoffice
           image: {{ include "kodbox.image" (dict "ctx" $ "image" .Values.kodoffice.image) }}
           imagePullPolicy: {{ .Values.kodoffice.image.pullPolicy }}
+          {{- with .Values.kodoffice.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.kodoffice.extraEnv }}
           env:
             {{- toYaml . | nindent 12 }}

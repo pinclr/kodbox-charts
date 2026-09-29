@@ -18,7 +18,9 @@ metadata:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: app
 spec:
+  {{- if not .Values.app.autoscaling.enabled }}
   replicas: {{ .Values.app.replicaCount }}
+  {{- end }}
   strategy:
     {{- toYaml .Values.app.strategy | nindent 4 }}
   selector:
@@ -45,6 +47,10 @@ spec:
         - name: wait-for-deps
           image: {{ $image }}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          {{- with .Values.app.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - php
             - -r
@@ -73,6 +79,10 @@ spec:
         - name: kodbox
           image: {{ $image }}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          {{- with .Values.app.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: MYSQL_HOST
               value: {{ include "kodbox.dbHost" . | quote }}

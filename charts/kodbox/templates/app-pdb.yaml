@@ -1,4 +1,5 @@
-{{- if and .Values.app.pdb.enabled (gt (int .Values.app.replicaCount) 1) }}
+{{- $minReplicas := ternary .Values.app.autoscaling.minReplicas .Values.app.replicaCount .Values.app.autoscaling.enabled }}
+{{- if and .Values.app.pdb.enabled (gt (int $minReplicas) 1) }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

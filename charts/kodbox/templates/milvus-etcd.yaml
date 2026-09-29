@@ -43,6 +43,10 @@ spec:
         - name: etcd
           image: {{ include "kodbox.image" (dict "ctx" $ "image" $v.image) }}
           imagePullPolicy: {{ $v.image.pullPolicy }}
+          {{- with $v.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - etcd
             - -advertise-client-urls=http://{{ include "kodbox.componentName" $sel }}:2379

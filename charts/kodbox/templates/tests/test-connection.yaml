@@ -12,6 +12,15 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   restartPolicy: Never
+  serviceAccountName: {{ include "kodbox.serviceAccountName" . }}
+  automountServiceAccountToken: false
+  # Meets the "restricted" Pod Security Standard.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
   {{- with .Values.imagePullSecrets }}
   imagePullSecrets:
     {{- toYaml . | nindent 4 }}
@@ -21,6 +30,10 @@ spec:
       # The app image ships curl, so the test needs no extra image.
       image: {{ include "kodbox.image" (dict "ctx" . "image" .Values.app.image "defaultTag" .Chart.AppVersion) }}
       imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
       command:
         - sh
         - -c

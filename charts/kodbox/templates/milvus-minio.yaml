@@ -47,6 +47,10 @@ spec:
         - name: minio
           image: {{ include "kodbox.image" (dict "ctx" $ "image" $v.image) }}
           imagePullPolicy: {{ $v.image.pullPolicy }}
+          {{- with $v.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
           env:
             - name: MINIO_ROOT_USER

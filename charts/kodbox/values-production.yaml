@@ -1,9 +1,9 @@
-# Example production values: two app replicas on a shared ReadWriteMany volume,
+# Example production values: 2-8 autoscaled app replicas on a shared ReadWriteMany volume,
 # sized for a team, exposed through a Gateway API gateway with TLS, with Milvus
 # for AI search. Only overrides are listed; everything else comes from values.yaml.
 #
 #   helm install kodbox kodbox/kodbox -n kodbox --create-namespace \
-#     -f values-production.yaml --set app.replicaCount=1
+#     -f values-production.yaml --set app.replicaCount=1 --set app.autoscaling.enabled=false
 #   # wait for the first start to finish, then:
 #   helm upgrade kodbox kodbox/kodbox -n kodbox -f values-production.yaml
 #
@@ -18,8 +18,13 @@ app:
     digest: "" # e.g. "sha256:..."
     pullPolicy: IfNotPresent
 
-  # Install with 1 (see above), then scale up.
+  # Install with 1 and autoscaling off (see above), then scale up.
   replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
   podAntiAffinity: soft
   pdb:
     enabled: true
@@ -89,7 +94,7 @@ db:
 redis:
   persistence:
     enabled: true
-    size: 5Gi
+    size: 10Gi
   resources:
     requests:
       cpu: 50m
@@ -118,12 +123,18 @@ imaginary:
 
 milvus:
   enabled: true
+  etcd:
+    env:
+      # 4 GiB quota; the 10Gi volume leaves room for WAL and snapshots.
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+    persistence:
+      size: 10Gi
   minio:
     persistence:
-      size: 50Gi
+      size: 80Gi
   standalone:
     persistence:
-      size: 20Gi
+      size: 40Gi
 
 networkPolicy:
   enabled: true

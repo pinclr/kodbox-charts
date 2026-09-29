@@ -41,6 +41,10 @@ spec:
         - name: imaginary
           image: {{ include "kodbox.image" (dict "ctx" $ "image" .Values.imaginary.image) }}
           imagePullPolicy: {{ .Values.imaginary.image.pullPolicy }}
+          {{- with .Values.imaginary.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.imaginary.args }}
           args:
             {{- toYaml . | nindent 12 }}

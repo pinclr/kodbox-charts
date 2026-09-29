@@ -11,11 +11,11 @@ install:
 | `redis` | StatefulSet | sessions and cache (append-only persistence) | 2Gi RWO |
 | `kodoffice` | Deployment | Office document server (browser-facing) | none |
 | `imaginary` | Deployment | thumbnails / image processing | none |
-| `etcd`, `minio`, `milvus` | StatefulSets | Milvus vector database for AI search (off by default) | 5Gi / 50Gi / 20Gi RWO |
+| `etcd`, `minio`, `milvus` | StatefulSets | Milvus vector database for AI search (off by default) | 4Gi / 8Gi / 8Gi RWO |
 
 The defaults are a minimal single-replica, non-HA install on the cluster's
 default storage class. [`values-production.yaml`](values-production.yaml) is an
-example production setup: two app replicas on a shared ReadWriteMany volume,
+example production setup: 2–8 autoscaled app replicas on a shared ReadWriteMany volume,
 larger resources, pre-created secrets, Milvus and Gateway API routing.
 
 Each component except `app` can be turned off with `<component>.enabled=false`
@@ -36,7 +36,7 @@ helm show values kodbox/kodbox > values.yaml          # all options
 curl -LO https://raw.githubusercontent.com/pinclr/kodbox-charts/main/charts/kodbox/values-production.yaml
 # edit storage classes, hostnames, gateway and secrets, then:
 helm install kodbox kodbox/kodbox -n kodbox --create-namespace \
-  -f values-production.yaml --set app.replicaCount=1
+  -f values-production.yaml --set app.replicaCount=1 --set app.autoscaling.enabled=false
 ```
 
 On first start the kodbox image copies the site into the volume, installs
@@ -146,26 +146,28 @@ Enabling Milvus (`milvus.enabled=true`) with the default sizes adds:
 
 | Service | CPU request | CPU limit | Memory request | Memory limit | Storage |
 |---|---|---|---|---|---|
-| etcd | 100m | 1 | 256Mi | 2Gi | 5Gi RWO |
-| minio | 100m | 1 | 256Mi | 2Gi | 50Gi RWO |
-| milvus standalone | 500m | 4 | 2Gi | 8Gi | 20Gi RWO |
-| **Milvus subtotal** | **0.7** | **6** | **2.5Gi** | **12Gi** | **75Gi** |
+| etcd | 100m | 1 | 256Mi | 2Gi | 4Gi RWO |
+| minio | 100m | 1 | 256Mi | 2Gi | 8Gi RWO |
+| milvus standalone | 500m | 4 | 2Gi | 8Gi | 8Gi RWO |
+| **Milvus subtotal** | **0.7** | **6** | **2.5Gi** | **12Gi** | **20Gi** |
 
 ### Production (`values-production.yaml`)
 
-Two app replicas on a shared ReadWriteMany volume, Milvus on.
+2–8 app replicas on a shared ReadWriteMany volume, autoscaled on CPU, Milvus
+on. Totals are at the minimum of 2 app replicas; each extra replica adds
+1 CPU / 2Gi of requests (up to +6 CPU / +12Gi at 8 replicas).
 
 | Service | Replicas | CPU request | CPU limit | Memory request | Memory limit | Storage |
 |---|---|---|---|---|---|---|
-| app (kodbox) | 2 | 1 each | 4 each | 2Gi each | 8Gi each | 250Gi RWX (shared) |
+| app (kodbox) | 2–8 | 1 each | 4 each | 2Gi each | 8Gi each | 250Gi RWX (shared) |
 | db (MariaDB) | 1 | 500m | 4 | 1Gi | 4Gi | 50Gi RWO |
-| redis | 1 | 50m | 1 | 64Mi | 2Gi | 5Gi RWO |
+| redis | 1 | 50m | 1 | 64Mi | 2Gi | 10Gi RWO |
 | kodoffice | 1 | 500m | 8 | 1Gi | 16Gi | – |
 | imaginary | 1 | 500m | 4 | 512Mi | 8Gi | – |
-| etcd | 1 | 100m | 1 | 256Mi | 2Gi | 5Gi RWO |
-| minio | 1 | 100m | 1 | 256Mi | 2Gi | 50Gi RWO |
-| milvus standalone | 1 | 500m | 4 | 2Gi | 8Gi | 20Gi RWO |
-| **Total** | | **4.25** | **31** | **~9.1Gi** | **58Gi** | **250Gi RWX + 130Gi RWO** |
+| etcd | 1 | 100m | 1 | 256Mi | 2Gi | 10Gi RWO |
+| minio | 1 | 100m | 1 | 256Mi | 2Gi | 80Gi RWO |
+| milvus standalone | 1 | 500m | 4 | 2Gi | 8Gi | 40Gi RWO |
+| **Total** | | **4.25** | **31** | **~9.1Gi** | **58Gi** | **250Gi RWX + 190Gi RWO** |
 
 The requests are small against the limits, so the scheduler places pods on
 their requests and the limits can burst. Plan for **at least 2 worker nodes**
@@ -184,7 +186,7 @@ kodoffice alone may burst to 16Gi and needs a node with that much free.
 | imaginary | Image size and concurrency (`-concurrency 10`, `-max-allowed-resolution 500` MP) | OOMKilled on large photos, slow thumbnails | Memory limit, or lower `-concurrency` / max resolution in `imaginary.args` |
 | milvus | Number of indexed documents (vectors held in memory) | OOMKilled, slow AI search | Memory limit; storage for segments |
 | minio | Milvus segment and index files | PVC filling up | `milvus.minio.persistence.size` |
-| etcd | Milvus metadata (small) | Alarms about the backend quota (`ETCD_QUOTA_BACKEND_BYTES`, 4 GiB) | Rarely needs changing |
+| etcd | Milvus metadata (small) | Alarms about the backend quota (`ETCD_QUOTA_BACKEND_BYTES`: 2 GiB default, 4 GiB in production) | Keep the quota well below the volume size |
 
 ## Scaling
 
@@ -193,7 +195,8 @@ More than one app replica needs a **ReadWriteMany** volume
 `app.strategy.type=RollingUpdate`; see `values-production.yaml`. The default
 ReadWriteOnce volume only supports a single replica with the `Recreate` strategy.
 
-Install with 1 replica, wait for the first start to finish, then scale:
+Install with 1 replica (and autoscaling off), wait for the first start to
+finish, then scale:
 
 ```bash
 helm upgrade kodbox kodbox/kodbox -n kodbox --reset-then-reuse-values \
@@ -207,6 +210,27 @@ without redis, or a PodDisruptionBudget whose `minAvailable` blocks node drains.
 replica the chart adds a PodDisruptionBudget (`app.pdb`, minAvailable 1), and
 replicas prefer different nodes (`app.podAntiAffinity`: `soft`, `hard` or `none`).
 
+### Autoscaling
+
+`app.autoscaling.enabled=true` adds a HorizontalPodAutoscaler (requires
+metrics-server) that replaces `replicaCount`; `values-production.yaml` runs
+2–8 replicas at a 70% CPU target. The same checks apply, using `maxReplicas`.
+
+How the target works:
+
+- Utilization is **relative to the CPU request**, not the limit: with the
+  production request of 1 CPU, 70% means an average of 700m per pod. Pods can
+  burst to their 4-CPU limit, so utilization can read above 100%.
+- It is a **near-current average across all app pods**, not a long-term one.
+  metrics-server samples usage about every 15s (averaged over that window), and
+  the HPA re-evaluates every 15s: `desired = ceil(replicas × current / target)`,
+  skipping changes within ±10% of the target.
+- **Scale-up is immediate** (up to double the pods, or +4, per 15s). **Scale-down
+  waits 5 minutes** and uses the highest recommendation seen in that window, so
+  short dips don't remove pods. Tune both with `app.autoscaling.behavior`.
+- Newly started pods' CPU is ignored until they are ready, so the first start
+  of a replica doesn't trigger further scaling.
+
 ## Upgrades
 
 Always upgrade with `--reset-then-reuse-values`. Plain `--reuse-values` reuses
@@ -215,6 +239,20 @@ are missing and templates can fail to render.
 
 Generated passwords (database, minio, admin) are read back from the existing
 Secrets on upgrade and don't change.
+
+**StatefulSet volume sizes can't be changed by an upgrade** (Kubernetes rejects
+changes to `volumeClaimTemplates`). 0.4.0 lowered the Milvus defaults (etcd
+5Gi→4Gi, minio 50Gi→8Gi, milvus 20Gi→8Gi): if Milvus runs on the old defaults,
+pin them before upgrading:
+
+```bash
+--set milvus.etcd.persistence.size=5Gi \
+--set milvus.minio.persistence.size=50Gi \
+--set milvus.standalone.persistence.size=20Gi
+```
+
+To grow a volume, expand the PVC itself (`kubectl edit pvc`, if the storage
+class allows expansion) and set the same size in values.
 
 ## Network policies
 
@@ -265,17 +303,47 @@ kubectl -n kodbox delete pvc --all
 **Deleting the namespace deletes every volume in it**, and with a storage class
 using `reclaimPolicy: Delete` the data is gone. Back up first.
 
-The Secrets holding generated passwords are deleted on uninstall. If you
-reinstall onto the kept volumes, set `database.password`,
-`database.rootPassword` and `milvus.minio.rootPassword` to the old values
-(or use `database.existingSecret`), or the services won't be able to log in to
-their existing data.
+The Secrets holding generated passwords (`<release>-db`, `<release>-admin`,
+`<release>-milvus`) are kept too, so a reinstall under the same release name and
+namespace reads them back and can still log in to the kept data. Delete them
+along with the PVCs to start over:
+
+```bash
+kubectl -n kodbox delete secret kodbox-db kodbox-admin kodbox-milvus
+```
+
+## Security
+
+- Every pod runs with the `RuntimeDefault` seccomp profile and no host access,
+  so the chart runs in namespaces enforcing the Pod Security **baseline**
+  standard (CI installs it into one). `<component>.podSecurityContext` and
+  `<component>.securityContext` add more; the kodcloud images start as root and
+  drop privileges themselves, so test before adding `runAsNonRoot` or dropping
+  capabilities.
+- Pods use a dedicated ServiceAccount (`serviceAccount.*`) without a mounted API
+  token; none of the components talk to the Kubernetes API.
+- The `helm test` pod meets the **restricted** standard.
+
+### GitOps (Argo CD)
+
+Generated passwords are read back from the existing Secrets with Helm's
+`lookup`, which returns nothing when a tool renders the chart with
+`helm template`, as Argo CD does. Every sync would then produce new random
+passwords and lock kodbox out of its database. With Argo CD, supply the
+credentials instead of generating them:
+
+- `database.existingSecret` and `admin.existingSecret`, pre-created (e.g. with
+  External Secrets or Sealed Secrets), and
+- `milvus.minio.rootPassword` when Milvus is enabled.
+
+Flux runs real Helm installs and upgrades, where `lookup` works.
 
 ## Main values
 
 | Key | Default | Notes |
 |---|---|---|
 | `app.replicaCount` | `1` | Scale up after first start; >1 needs ReadWriteMany |
+| `app.autoscaling.enabled` | `false` | HPA, `minReplicas` 2 / `maxReplicas` 8 / 70% CPU |
 | `app.persistence.storageClass` | `""` (cluster default) | |
 | `app.persistence.accessModes` | `[ReadWriteOnce]` | `ReadWriteMany` for multiple replicas |
 | `app.persistence.size` | `8Gi` | Holds all user files |
@@ -291,6 +359,8 @@ their existing data.
 | `networkPolicy.enabled` | `true` | |
 | `global.imageRegistry` | `""` | Registry for every image (mirror / pull-through cache) |
 | `app.waitForDependencies` | `true` | Wait for database and redis on start |
+| `serviceAccount.create` | `true` | Dedicated ServiceAccount, API token not mounted |
+| `<component>.podSecurityContext` | `RuntimeDefault` seccomp | Plus `<component>.securityContext` for containers |
 | `<component>.resources` | set for every component | All containers have requests and limits |
 
 See `values.yaml` for everything else.
