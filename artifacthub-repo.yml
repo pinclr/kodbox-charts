@@ -6,6 +6,6 @@ repositoryID: 6a10b84f-d8ca-44a2-ae88-3091fb1ad619
 
 # Owners listed here can claim the repository in Artifact Hub (email must match
 # their Artifact Hub account).
-# owners:
-#   - name: pinclr
-#     email: someone@pinclr.com
+owners:
+  - name: Robert Wen
+    email: robert@pinclr.com
