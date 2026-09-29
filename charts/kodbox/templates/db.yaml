@@ -1,5 +1,5 @@
 {{- if .Values.db.enabled }}
-{{- $sel := dict "ctx" . "component" "db" }}
+{{- $sel := dict "ctx" . "component" "db" "v" .Values.db }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -31,15 +31,16 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
-    spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
+        {{- include "kodbox.podLabels" $sel | nindent 8 }}
+      {{- with .Values.db.podAnnotations }}
+      annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    spec:
+      {{- include "kodbox.podScheduling" $sel | nindent 6 }}
       containers:
         - name: mariadb
-          image: {{ include "kodbox.image" .Values.db.image }}
+          image: {{ include "kodbox.image" (dict "ctx" $ "image" .Values.db.image) }}
           imagePullPolicy: {{ .Values.db.image.pullPolicy }}
           {{- with .Values.db.args }}
           args:
@@ -50,6 +51,9 @@ spec:
               value: "1"
             - name: MARIADB_DISABLE_UPGRADE_BACKUP
               value: "1"
+            {{- with .Values.db.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           envFrom:
             - secretRef:
                 name: {{ include "kodbox.dbSecretName" . }}
@@ -79,18 +83,6 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- with .Values.db.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.db.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.db.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain

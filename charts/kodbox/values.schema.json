@@ -6,7 +6,13 @@
   "properties": {
     "global": {
       "type": "object",
-      "description": "Global values shared with parent charts (unused by this chart)."
+      "description": "Global values, shared with parent charts.",
+      "properties": {
+        "imageRegistry": {
+          "type": "string",
+          "description": "Registry for every image (a mirror or pull-through cache); overrides each image's registry."
+        }
+      }
     },
     "nameOverride": {
       "type": "string",
@@ -39,16 +45,25 @@
           "type": "object",
           "description": "Container image for kodbox.",
           "properties": {
+            "registry": {
+              "type": "string",
+              "description": "Image registry; global.imageRegistry overrides it."
+            },
             "repository": {
               "type": "string",
-              "description": "Image repository."
+              "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
             },
             "tag": {
               "type": [
                 "string",
                 "number"
               ],
-              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+              "description": "Image tag."
+            },
+            "digest": {
+              "type": "string",
+              "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
             },
             "pullPolicy": {
               "type": "string",
@@ -176,20 +191,9 @@
           },
           "additionalProperties": false
         },
-        "extraEnv": {
-          "type": "array",
-          "description": "Extra environment variables for the app container.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name"
-            ]
-          }
+        "waitForDependencies": {
+          "type": "boolean",
+          "description": "Wait for the database and redis to accept connections before starting kodbox."
         },
         "resources": {
           "type": "object",
@@ -209,7 +213,34 @@
         },
         "podAnnotations": {
           "type": "object",
-          "description": "Extra annotations for app pods."
+          "description": "Extra annotations for the app pods."
+        },
+        "podLabels": {
+          "type": "object",
+          "description": "Extra labels for the app pods."
+        },
+        "priorityClassName": {
+          "type": "string",
+          "description": "PriorityClass for the app pods."
+        },
+        "topologySpreadConstraints": {
+          "type": "array",
+          "description": "Topology spread constraints for the app pods; a missing labelSelector is filled with the pod's labels."
+        },
+        "extraEnv": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "description": "Extra environment variables for the the app container."
         }
       },
       "additionalProperties": false
@@ -287,16 +318,25 @@
           "type": "object",
           "description": "Container image for MariaDB.",
           "properties": {
+            "registry": {
+              "type": "string",
+              "description": "Image registry; global.imageRegistry overrides it."
+            },
             "repository": {
               "type": "string",
-              "description": "Image repository."
+              "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
             },
             "tag": {
               "type": [
                 "string",
                 "number"
               ],
-              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+              "description": "Image tag."
+            },
+            "digest": {
+              "type": "string",
+              "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
             },
             "pullPolicy": {
               "type": "string",
@@ -378,6 +418,37 @@
         "affinity": {
           "type": "object",
           "description": "Affinity rules for MariaDB pods."
+        },
+        "podAnnotations": {
+          "type": "object",
+          "description": "Extra annotations for MariaDB pods."
+        },
+        "podLabels": {
+          "type": "object",
+          "description": "Extra labels for MariaDB pods."
+        },
+        "priorityClassName": {
+          "type": "string",
+          "description": "PriorityClass for MariaDB pods."
+        },
+        "topologySpreadConstraints": {
+          "type": "array",
+          "description": "Topology spread constraints for MariaDB pods; a missing labelSelector is filled with the pod's labels."
+        },
+        "extraEnv": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "description": "Extra environment variables for the MariaDB container."
         }
       },
       "additionalProperties": false
@@ -411,16 +482,25 @@
           "type": "object",
           "description": "Container image for Redis.",
           "properties": {
+            "registry": {
+              "type": "string",
+              "description": "Image registry; global.imageRegistry overrides it."
+            },
             "repository": {
               "type": "string",
-              "description": "Image repository."
+              "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
             },
             "tag": {
               "type": [
                 "string",
                 "number"
               ],
-              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+              "description": "Image tag."
+            },
+            "digest": {
+              "type": "string",
+              "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
             },
             "pullPolicy": {
               "type": "string",
@@ -506,6 +586,37 @@
         "affinity": {
           "type": "object",
           "description": "Affinity rules for Redis pods."
+        },
+        "podAnnotations": {
+          "type": "object",
+          "description": "Extra annotations for Redis pods."
+        },
+        "podLabels": {
+          "type": "object",
+          "description": "Extra labels for Redis pods."
+        },
+        "priorityClassName": {
+          "type": "string",
+          "description": "PriorityClass for Redis pods."
+        },
+        "topologySpreadConstraints": {
+          "type": "array",
+          "description": "Topology spread constraints for Redis pods; a missing labelSelector is filled with the pod's labels."
+        },
+        "extraEnv": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "description": "Extra environment variables for the Redis container."
         }
       },
       "additionalProperties": false
@@ -533,16 +644,25 @@
           "type": "object",
           "description": "Container image for KodOffice.",
           "properties": {
+            "registry": {
+              "type": "string",
+              "description": "Image registry; global.imageRegistry overrides it."
+            },
             "repository": {
               "type": "string",
-              "description": "Image repository."
+              "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
             },
             "tag": {
               "type": [
                 "string",
                 "number"
               ],
-              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+              "description": "Image tag."
+            },
+            "digest": {
+              "type": "string",
+              "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
             },
             "pullPolicy": {
               "type": "string",
@@ -596,6 +716,37 @@
         "affinity": {
           "type": "object",
           "description": "Affinity rules for KodOffice pods."
+        },
+        "podAnnotations": {
+          "type": "object",
+          "description": "Extra annotations for KodOffice pods."
+        },
+        "podLabels": {
+          "type": "object",
+          "description": "Extra labels for KodOffice pods."
+        },
+        "priorityClassName": {
+          "type": "string",
+          "description": "PriorityClass for KodOffice pods."
+        },
+        "topologySpreadConstraints": {
+          "type": "array",
+          "description": "Topology spread constraints for KodOffice pods; a missing labelSelector is filled with the pod's labels."
+        },
+        "extraEnv": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "description": "Extra environment variables for the KodOffice container."
         }
       },
       "additionalProperties": false
@@ -612,16 +763,25 @@
           "type": "object",
           "description": "Container image for Imaginary.",
           "properties": {
+            "registry": {
+              "type": "string",
+              "description": "Image registry; global.imageRegistry overrides it."
+            },
             "repository": {
               "type": "string",
-              "description": "Image repository."
+              "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
             },
             "tag": {
               "type": [
                 "string",
                 "number"
               ],
-              "description": "Image tag, optionally with a digest (tag@sha256:...)."
+              "description": "Image tag."
+            },
+            "digest": {
+              "type": "string",
+              "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
             },
             "pullPolicy": {
               "type": "string",
@@ -679,6 +839,37 @@
         "affinity": {
           "type": "object",
           "description": "Affinity rules for Imaginary pods."
+        },
+        "podAnnotations": {
+          "type": "object",
+          "description": "Extra annotations for Imaginary pods."
+        },
+        "podLabels": {
+          "type": "object",
+          "description": "Extra labels for Imaginary pods."
+        },
+        "priorityClassName": {
+          "type": "string",
+          "description": "PriorityClass for Imaginary pods."
+        },
+        "topologySpreadConstraints": {
+          "type": "array",
+          "description": "Topology spread constraints for Imaginary pods; a missing labelSelector is filled with the pod's labels."
+        },
+        "extraEnv": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "description": "Extra environment variables for the Imaginary container."
         }
       },
       "additionalProperties": false
@@ -699,16 +890,25 @@
               "type": "object",
               "description": "Container image for etcd.",
               "properties": {
+                "registry": {
+                  "type": "string",
+                  "description": "Image registry; global.imageRegistry overrides it."
+                },
                 "repository": {
                   "type": "string",
-                  "description": "Image repository."
+                  "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
                 },
                 "tag": {
                   "type": [
                     "string",
                     "number"
                   ],
-                  "description": "Image tag, optionally with a digest (tag@sha256:...)."
+                  "description": "Image tag."
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+                  "pattern": "^(sha256:[a-f0-9]{64})?$"
                 },
                 "pullPolicy": {
                   "type": "string",
@@ -781,6 +981,37 @@
             "affinity": {
               "type": "object",
               "description": "Affinity rules for etcd pods."
+            },
+            "podAnnotations": {
+              "type": "object",
+              "description": "Extra annotations for etcd pods."
+            },
+            "podLabels": {
+              "type": "object",
+              "description": "Extra labels for etcd pods."
+            },
+            "priorityClassName": {
+              "type": "string",
+              "description": "PriorityClass for etcd pods."
+            },
+            "topologySpreadConstraints": {
+              "type": "array",
+              "description": "Topology spread constraints for etcd pods; a missing labelSelector is filled with the pod's labels."
+            },
+            "extraEnv": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "description": "Extra environment variables for the etcd container."
             }
           },
           "additionalProperties": false
@@ -793,16 +1024,25 @@
               "type": "object",
               "description": "Container image for MinIO.",
               "properties": {
+                "registry": {
+                  "type": "string",
+                  "description": "Image registry; global.imageRegistry overrides it."
+                },
                 "repository": {
                   "type": "string",
-                  "description": "Image repository."
+                  "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
                 },
                 "tag": {
                   "type": [
                     "string",
                     "number"
                   ],
-                  "description": "Image tag, optionally with a digest (tag@sha256:...)."
+                  "description": "Image tag."
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+                  "pattern": "^(sha256:[a-f0-9]{64})?$"
                 },
                 "pullPolicy": {
                   "type": "string",
@@ -881,6 +1121,37 @@
             "affinity": {
               "type": "object",
               "description": "Affinity rules for MinIO pods."
+            },
+            "podAnnotations": {
+              "type": "object",
+              "description": "Extra annotations for MinIO pods."
+            },
+            "podLabels": {
+              "type": "object",
+              "description": "Extra labels for MinIO pods."
+            },
+            "priorityClassName": {
+              "type": "string",
+              "description": "PriorityClass for MinIO pods."
+            },
+            "topologySpreadConstraints": {
+              "type": "array",
+              "description": "Topology spread constraints for MinIO pods; a missing labelSelector is filled with the pod's labels."
+            },
+            "extraEnv": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "description": "Extra environment variables for the MinIO container."
             }
           },
           "additionalProperties": false
@@ -893,16 +1164,25 @@
               "type": "object",
               "description": "Container image for Milvus.",
               "properties": {
+                "registry": {
+                  "type": "string",
+                  "description": "Image registry; global.imageRegistry overrides it."
+                },
                 "repository": {
                   "type": "string",
-                  "description": "Image repository."
+                  "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
                 },
                 "tag": {
                   "type": [
                     "string",
                     "number"
                   ],
-                  "description": "Image tag, optionally with a digest (tag@sha256:...)."
+                  "description": "Image tag."
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+                  "pattern": "^(sha256:[a-f0-9]{64})?$"
                 },
                 "pullPolicy": {
                   "type": "string",
@@ -1002,6 +1282,37 @@
             "affinity": {
               "type": "object",
               "description": "Affinity rules for Milvus pods."
+            },
+            "podAnnotations": {
+              "type": "object",
+              "description": "Extra annotations for Milvus pods."
+            },
+            "podLabels": {
+              "type": "object",
+              "description": "Extra labels for Milvus pods."
+            },
+            "priorityClassName": {
+              "type": "string",
+              "description": "PriorityClass for Milvus pods."
+            },
+            "topologySpreadConstraints": {
+              "type": "array",
+              "description": "Topology spread constraints for Milvus pods; a missing labelSelector is filled with the pod's labels."
+            },
+            "extraEnv": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "description": "Extra environment variables for the Milvus container."
             }
           },
           "additionalProperties": false

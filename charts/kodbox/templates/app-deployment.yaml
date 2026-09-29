@@ -1,4 +1,15 @@
-{{- $sel := dict "ctx" . "component" "app" }}
+{{- include "kodbox.validate" . }}
+{{- $sel := dict "ctx" . "component" "app" "v" .Values.app }}
+{{- $image := include "kodbox.image" (dict "ctx" . "image" .Values.app.image "defaultTag" .Chart.AppVersion) }}
+{{- $affinity := .Values.app.affinity }}
+{{- if not $affinity }}
+{{- $term := dict "topologyKey" "kubernetes.io/hostname" "labelSelector" (dict "matchLabels" (include "kodbox.selectorLabels" $sel | fromYaml)) }}
+{{- if eq .Values.app.podAntiAffinity "hard" }}
+{{- $affinity = dict "podAntiAffinity" (dict "requiredDuringSchedulingIgnoredDuringExecution" (list $term)) }}
+{{- else if eq .Values.app.podAntiAffinity "soft" }}
+{{- $affinity = dict "podAntiAffinity" (dict "preferredDuringSchedulingIgnoredDuringExecution" (list (dict "weight" 100 "podAffinityTerm" $term))) }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,7 +27,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+        {{- include "kodbox.podLabels" $sel | nindent 8 }}
       annotations:
         # Checksum the configured values, not the rendered secret: generated
         # passwords are re-randomised on every render at install time.
@@ -26,13 +37,41 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
+      {{- include "kodbox.podScheduling" (merge (dict "affinity" $affinity) $sel) | nindent 6 }}
+      {{- if .Values.app.waitForDependencies }}
+      # The image installs kodbox against the database on first start, so make
+      # sure the database (and redis) accept connections before it runs.
+      initContainers:
+        - name: wait-for-deps
+          image: {{ $image }}
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          command:
+            - php
+            - -r
+            - |
+              foreach (array_filter(explode(' ', getenv('WAIT_FOR'))) as $target) {
+                  [$host, $port] = explode(':', $target);
+                  while (!($s = @fsockopen($host, (int) $port, $errno, $errstr, 3))) {
+                      echo "waiting for $target: $errstr\n";
+                      sleep(3);
+                  }
+                  fclose($s);
+                  echo "$target is up\n";
+              }
+          env:
+            - name: WAIT_FOR
+              value: {{ printf "%s:%s" (include "kodbox.dbHost" .) (include "kodbox.dbPort" .) }}{{ with (include "kodbox.redisHost" .) }} {{ . }}:{{ include "kodbox.redisPort" $ }}{{ end }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       {{- end }}
       containers:
         - name: kodbox
-          image: {{ include "kodbox.image" (dict "repository" .Values.app.image.repository "tag" (.Values.app.image.tag | default .Chart.AppVersion)) }}
+          image: {{ $image }}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           env:
             - name: MYSQL_HOST
@@ -103,33 +142,3 @@ spec:
         - name: healthz
           configMap:
             name: {{ include "kodbox.componentName" $sel }}
-      {{- with .Values.app.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- if .Values.app.affinity }}
-      affinity:
-        {{- toYaml .Values.app.affinity | nindent 8 }}
-      {{- else if eq .Values.app.podAntiAffinity "hard" }}
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - topologyKey: kubernetes.io/hostname
-              labelSelector:
-                matchLabels:
-                  {{- include "kodbox.selectorLabels" $sel | nindent 18 }}
-      {{- else if eq .Values.app.podAntiAffinity "soft" }}
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels:
-                    {{- include "kodbox.selectorLabels" $sel | nindent 20 }}
-      {{- end }}
-      {{- with .Values.app.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}

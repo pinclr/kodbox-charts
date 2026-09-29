@@ -1,5 +1,5 @@
 {{- if .Values.milvus.enabled }}
-{{- $sel := dict "ctx" . "component" "minio" }}
+{{- $sel := dict "ctx" . "component" "minio" "v" .Values.milvus.minio }}
 {{- $v := .Values.milvus.minio }}
 apiVersion: v1
 kind: Service
@@ -35,17 +35,17 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+        {{- include "kodbox.podLabels" $sel | nindent 8 }}
       annotations:
         checksum/milvus-secret: {{ toYaml .Values.milvus.minio | sha256sum }}
-    spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
+        {{- with .Values.milvus.minio.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+    spec:
+      {{- include "kodbox.podScheduling" $sel | nindent 6 }}
       containers:
         - name: minio
-          image: {{ include "kodbox.image" $v.image }}
+          image: {{ include "kodbox.image" (dict "ctx" $ "image" $v.image) }}
           imagePullPolicy: {{ $v.image.pullPolicy }}
           command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
           env:
@@ -59,6 +59,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
                   key: MINIO_ROOT_PASSWORD
+            {{- with $v.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: api
               containerPort: 9000
@@ -82,18 +85,6 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- with $v.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with $v.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with $v.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain

@@ -14,7 +14,8 @@ app:
     # Empty uses the chart's appVersion. Pin a digest so every replica and
     # restart runs the same build. Find it with:
     #   skopeo inspect docker://docker.io/kodcloud/kodbox:1.68.10
-    tag: "" # e.g. "1.68.10@sha256:..."
+    tag: ""
+    digest: "" # e.g. "sha256:..."
     pullPolicy: IfNotPresent
 
   # Install with 1 (see above), then scale up.

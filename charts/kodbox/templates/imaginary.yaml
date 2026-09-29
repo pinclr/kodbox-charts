@@ -1,5 +1,5 @@
 {{- if .Values.imaginary.enabled }}
-{{- $sel := dict "ctx" . "component" "imaginary" }}
+{{- $sel := dict "ctx" . "component" "imaginary" "v" .Values.imaginary }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -30,15 +30,16 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
-    spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
+        {{- include "kodbox.podLabels" $sel | nindent 8 }}
+      {{- with .Values.imaginary.podAnnotations }}
+      annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    spec:
+      {{- include "kodbox.podScheduling" $sel | nindent 6 }}
       containers:
         - name: imaginary
-          image: {{ include "kodbox.image" .Values.imaginary.image }}
+          image: {{ include "kodbox.image" (dict "ctx" $ "image" .Values.imaginary.image) }}
           imagePullPolicy: {{ .Values.imaginary.image.pullPolicy }}
           {{- with .Values.imaginary.args }}
           args:
@@ -47,6 +48,9 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.imaginary.port | quote }}
+            {{- with .Values.imaginary.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.imaginary.port }}
@@ -64,16 +68,4 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- with .Values.imaginary.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.imaginary.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.imaginary.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
 {{- end }}

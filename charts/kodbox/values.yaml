@@ -3,6 +3,11 @@
 # as a minimal single-replica, non-HA setup on the cluster's default storage class.
 # See values-production.yaml for a multi-replica production example.
 
+global:
+  # Registry for every image (a mirror or pull-through cache holding the same
+  # repository paths). Overrides each image's registry.
+  imageRegistry: ""
+
 nameOverride: ""
 fullnameOverride: ""
 
@@ -12,10 +17,12 @@ imagePullSecrets: []
 app:
   image:
     # Versioned kodbox tags are published on Docker Hub.
-    repository: docker.io/kodcloud/kodbox
-    # Empty uses the chart's appVersion. Append a digest to pin a build:
-    # "1.68.10@sha256:...".
+    registry: docker.io
+    repository: kodcloud/kodbox
+    # Empty uses the chart's appVersion.
     tag: ""
+    # Pin a build, e.g. "sha256:..."; used together with the tag.
+    digest: ""
     pullPolicy: IfNotPresent
 
   # Replicas share the site/data volume (ReadWriteMany) and sessions in redis.
@@ -67,6 +74,16 @@ app:
   tolerations: []
   affinity: {}
   podAnnotations: {}
+  podLabels: {}
+  priorityClassName: ""
+  # Constraints without a labelSelector get the component's pod labels.
+  topologySpreadConstraints: []
+  #  - maxSkew: 1
+  #    topologyKey: topology.kubernetes.io/zone
+  #    whenUnsatisfiable: ScheduleAnyway
+
+  # Wait for the database and redis to accept connections before starting.
+  waitForDependencies: true
 
 
 ## Initial kodbox admin account, applied only on the very first start (when the
@@ -97,8 +114,10 @@ database:
 db:
   enabled: true
   image:
-    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/mariadb
+    registry: registry.cn-hangzhou.aliyuncs.com
+    repository: kodcloud/mariadb
     tag: lts
+    digest: ""
     pullPolicy: IfNotPresent
   args:
     - --transaction-isolation=READ-COMMITTED
@@ -120,6 +139,11 @@ db:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+  priorityClassName: ""
+  topologySpreadConstraints: []
+  extraEnv: []
 
 externalDatabase:
   host: ""
@@ -129,8 +153,10 @@ externalDatabase:
 redis:
   enabled: true
   image:
-    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/redis
+    registry: registry.cn-hangzhou.aliyuncs.com
+    repository: kodcloud/redis
     tag: alpine
+    digest: ""
     pullPolicy: IfNotPresent
   # Append-only file so sessions survive redis restarts.
   args:
@@ -157,6 +183,11 @@ redis:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+  priorityClassName: ""
+  topologySpreadConstraints: []
+  extraEnv: []
 
 externalRedis:
   host: ""
@@ -166,8 +197,10 @@ externalRedis:
 kodoffice:
   enabled: true
   image:
-    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/kodoffice
+    registry: registry.cn-hangzhou.aliyuncs.com
+    repository: kodcloud/kodoffice
     tag: 7.4.1.1
+    digest: ""
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -182,13 +215,20 @@ kodoffice:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+  priorityClassName: ""
+  topologySpreadConstraints: []
+  extraEnv: []
 
 ## Imaginary thumbnail/image processing service (called server-side by kodbox)
 imaginary:
   enabled: true
   image:
-    repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/imaginary
+    registry: registry.cn-hangzhou.aliyuncs.com
+    repository: kodcloud/imaginary
     tag: latest
+    digest: ""
     pullPolicy: IfNotPresent
   port: 9000
   args:
@@ -209,6 +249,11 @@ imaginary:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+  priorityClassName: ""
+  topologySpreadConstraints: []
+  extraEnv: []
 
 ## Milvus vector database stack (etcd + minio + milvus standalone), mirroring
 ## the milvus docker-compose shipped with the install. Only needed for kodbox's
@@ -218,8 +263,10 @@ milvus:
 
   etcd:
     image:
-      repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/etcd
+      registry: registry.cn-hangzhou.aliyuncs.com
+      repository: kodcloud/etcd
       tag: v3.5.25
+      digest: ""
       pullPolicy: IfNotPresent
     env:
       ETCD_AUTO_COMPACTION_MODE: revision
@@ -241,11 +288,18 @@ milvus:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+    podAnnotations: {}
+    podLabels: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
+    extraEnv: []
 
   minio:
     image:
-      repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/minio
+      registry: registry.cn-hangzhou.aliyuncs.com
+      repository: kodcloud/minio
       tag: RELEASE.2024-12-18T13-15-44Z
+      digest: ""
       pullPolicy: IfNotPresent
     rootUser: minioadmin
     # Left empty, a random password is generated on install and kept across upgrades.
@@ -265,11 +319,18 @@ milvus:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+    podAnnotations: {}
+    podLabels: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
+    extraEnv: []
 
   standalone:
     image:
-      repository: registry.cn-hangzhou.aliyuncs.com/kodcloud/milvus
+      registry: registry.cn-hangzhou.aliyuncs.com
+      repository: kodcloud/milvus
       tag: v2.6.7
+      digest: ""
       pullPolicy: IfNotPresent
     mqType: woodpecker
     service:
@@ -291,6 +352,11 @@ milvus:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+    podAnnotations: {}
+    podLabels: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
+    extraEnv: []
 
 ## NetworkPolicies restricting who can reach the backing services:
 ## db/redis/imaginary from the app, etcd/minio from milvus, milvus from the app.

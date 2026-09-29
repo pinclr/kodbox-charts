@@ -1,5 +1,5 @@
 {{- if .Values.milvus.enabled }}
-{{- $sel := dict "ctx" . "component" "milvus" }}
+{{- $sel := dict "ctx" . "component" "milvus" "v" .Values.milvus.standalone }}
 {{- $v := .Values.milvus.standalone }}
 apiVersion: v1
 kind: Service
@@ -36,21 +36,21 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
+        {{- include "kodbox.podLabels" $sel | nindent 8 }}
       annotations:
         checksum/milvus-secret: {{ toYaml .Values.milvus.minio | sha256sum }}
-    spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
+        {{- with .Values.milvus.standalone.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+    spec:
+      {{- include "kodbox.podScheduling" $sel | nindent 6 }}
       securityContext:
         seccompProfile:
           type: Unconfined
       # Milvus panics if etcd is unreachable at startup, so wait for its deps.
       initContainers:
         - name: wait-for-deps
-          image: {{ include "kodbox.image" $v.image }}
+          image: {{ include "kodbox.image" (dict "ctx" $ "image" $v.image) }}
           imagePullPolicy: {{ $v.image.pullPolicy }}
           command:
             - sh
@@ -67,7 +67,7 @@ spec:
               memory: 64Mi
       containers:
         - name: milvus
-          image: {{ include "kodbox.image" $v.image }}
+          image: {{ include "kodbox.image" (dict "ctx" $ "image" $v.image) }}
           imagePullPolicy: {{ $v.image.pullPolicy }}
           command: ["milvus", "run", "standalone"]
           env:
@@ -77,6 +77,9 @@ spec:
               value: {{ include "kodbox.componentName" (dict "ctx" . "component" "minio") }}:9000
             - name: MQ_TYPE
               value: {{ $v.mqType | quote }}
+            {{- with $v.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: grpc
               containerPort: 19530
@@ -117,18 +120,6 @@ spec:
             items:
               - key: user.yaml
                 path: user.yaml
-      {{- with $v.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with $v.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with $v.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain

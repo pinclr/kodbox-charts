@@ -1,5 +1,5 @@
 {{- if .Values.redis.enabled }}
-{{- $sel := dict "ctx" . "component" "redis" }}
+{{- $sel := dict "ctx" . "component" "redis" "v" .Values.redis }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -31,18 +31,19 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "kodbox.selectorLabels" $sel | nindent 8 }}
-    spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
+        {{- include "kodbox.podLabels" $sel | nindent 8 }}
+      {{- with .Values.redis.podAnnotations }}
+      annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    spec:
+      {{- include "kodbox.podScheduling" $sel | nindent 6 }}
       # The redis user (uid 999, gid 1000) must be able to write the volume.
       securityContext:
         fsGroup: 1000
       containers:
         - name: redis
-          image: {{ include "kodbox.image" .Values.redis.image }}
+          image: {{ include "kodbox.image" (dict "ctx" $ "image" .Values.redis.image) }}
           imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
           # Leading "redis-server" lets the image's entrypoint fix /data ownership
           # and drop privileges; bare "--flag" args skip that.
@@ -51,6 +52,10 @@ spec:
             {{- with .Values.redis.args }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- with .Values.redis.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: redis
               containerPort: 6379
@@ -75,18 +80,6 @@ spec:
       volumes:
         - name: data
           emptyDir: {}
-      {{- end }}
-      {{- with .Values.redis.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.redis.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.redis.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
       {{- end }}
   {{- if .Values.redis.persistence.enabled }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
