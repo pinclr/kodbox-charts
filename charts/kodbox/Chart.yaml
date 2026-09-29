@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.4.0
+version: 0.4.1
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -27,22 +27,10 @@ annotations:
     - name: kodbox
       url: https://kodcloud.com
   artifacthub.io/changes: |
-    - kind: security
-      description: Milvus no longer runs with the Unconfined seccomp profile; every pod uses RuntimeDefault (Pod Security baseline)
-    - kind: security
-      description: Dedicated ServiceAccount without a mounted API token
     - kind: added
-      description: podSecurityContext and securityContext for every component
-    - kind: added
-      description: HorizontalPodAutoscaler for the app (app.autoscaling); production example scales 2-8 replicas
+      description: timezone value setting TZ for every component and PHP's date.timezone for kodbox
     - kind: changed
-      description: Secrets with generated passwords are kept on uninstall, like the data volumes
-    - kind: changed
-      description: Milvus volume defaults etcd 4Gi, minio 8Gi, milvus 8Gi (pin the old sizes before upgrading an existing Milvus)
-    - kind: changed
-      description: etcd backend quota defaults to 2 GiB
-    - kind: added
-      description: README notes for GitOps (Argo CD) and autoscaling
+      description: Production example uses Beijing time (Asia/Shanghai)
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc

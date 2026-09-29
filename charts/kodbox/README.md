@@ -357,6 +357,7 @@ Flux runs real Helm installs and upgrades, where `lookup` works.
 | `gateway.enabled` | `false` | Gateway API HTTPRoutes |
 | `ingress.enabled` | `false` | |
 | `networkPolicy.enabled` | `true` | |
+| `timezone` | `""` (UTC) | IANA zone for all components, e.g. `Asia/Shanghai`: sets `TZ` and PHP's `date.timezone` |
 | `global.imageRegistry` | `""` | Registry for every image (mirror / pull-through cache) |
 | `app.waitForDependencies` | `true` | Wait for database and redis on start |
 | `serviceAccount.create` | `true` | Dedicated ServiceAccount, API token not mounted |

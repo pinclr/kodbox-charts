@@ -63,8 +63,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
                   key: MINIO_ROOT_PASSWORD
-            {{- with $v.extraEnv }}
-            {{- toYaml . | nindent 12 }}
+            {{- with (include "kodbox.extraEnv" $sel | trim) }}
+            {{- . | nindent 12 }}
             {{- end }}
           ports:
             - name: api

@@ -104,6 +104,7 @@ schema = {
         "global": obj("Global values, shared with parent charts.", {
             "imageRegistry": s("Registry for every image (a mirror or pull-through cache); overrides each image's registry."),
         }, strict=False),
+        "timezone": s("IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.timezone. Empty keeps UTC.", pattern="^([A-Za-z_]+(/[A-Za-z0-9_+-]+)*)?$"),
         "nameOverride": s("Override the chart name used in resource names."),
         "fullnameOverride": s("Override the full resource name prefix."),
         "imagePullSecrets": {

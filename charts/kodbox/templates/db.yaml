@@ -55,8 +55,8 @@ spec:
               value: "1"
             - name: MARIADB_DISABLE_UPGRADE_BACKUP
               value: "1"
-            {{- with .Values.db.extraEnv }}
-            {{- toYaml . | nindent 12 }}
+            {{- with (include "kodbox.extraEnv" $sel | trim) }}
+            {{- . | nindent 12 }}
             {{- end }}
           envFrom:
             - secretRef:

@@ -57,8 +57,8 @@ spec:
             - name: {{ $k }}
               value: {{ $val | quote }}
             {{- end }}
-            {{- with $v.extraEnv }}
-            {{- toYaml . | nindent 12 }}
+            {{- with (include "kodbox.extraEnv" $sel | trim) }}
+            {{- . | nindent 12 }}
             {{- end }}
           ports:
             - name: client

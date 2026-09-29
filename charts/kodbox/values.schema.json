@@ -14,6 +14,11 @@
         }
       }
     },
+    "timezone": {
+      "type": "string",
+      "description": "IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.timezone. Empty keeps UTC.",
+      "pattern": "^([A-Za-z_]+(/[A-Za-z0-9_+-]+)*)?$"
+    },
     "nameOverride": {
       "type": "string",
       "description": "Override the chart name used in resource names."

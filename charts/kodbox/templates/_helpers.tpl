@@ -100,6 +100,20 @@ starts with a registry host (e.g. "quay.io/org/img") is used as-is.
 {{- $ref }}
 {{- end }}
 
+{{/*
+Environment list items added to every component's main container: TZ from
+.Values.timezone, then v.extraEnv. Call with (dict "ctx" $ "v" .Values.<component>).
+*/}}
+{{- define "kodbox.extraEnv" -}}
+{{- with .ctx.Values.timezone }}
+- name: TZ
+  value: {{ . | quote }}
+{{- end }}
+{{- with .v.extraEnv }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}
+
 {{/* Pod template labels. Call with (dict "ctx" $ "component" "app" "v" .Values.app) */}}
 {{- define "kodbox.podLabels" -}}
 {{ include "kodbox.selectorLabels" . }}
