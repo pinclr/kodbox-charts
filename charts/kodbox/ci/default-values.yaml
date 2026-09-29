@@ -1,0 +1,11 @@
+# Values for the CI test install (ct install on kind). Covers the app's first
+# start against the bundled database and redis, plus imaginary. KodOffice is
+# left out: its multi-GB image makes CI slow and flaky.
+kodoffice:
+  enabled: false
+
+app:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi

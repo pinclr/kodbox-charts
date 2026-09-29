@@ -6,3 +6,4 @@
 *.orig
 .idea/
 .vscode/
+ci/

@@ -86,6 +86,41 @@ e.g. `nginx.ingress.kubernetes.io/proxy-body-size: "0"`.
 Uploads and downloads are fine while data flows. `gateway.timeouts` sets the
 HTTPRoute request timeouts but doesn't change a proxy's idle timeout.
 
+## Images and registries
+
+Each image has `registry`, `repository`, `tag` and `digest`:
+
+| Component | Default image |
+|---|---|
+| app | `docker.io/kodcloud/kodbox:<appVersion>` |
+| db, redis, kodoffice, imaginary, etcd, minio, milvus | `registry.cn-hangzhou.aliyuncs.com/kodcloud/<name>:<tag>` |
+
+- `global.imageRegistry` replaces the registry of every image, e.g. a mirror or
+  pull-through cache holding the same `kodcloud/...` paths:
+  `--set global.imageRegistry=harbor.example.com/kodcloud-mirror`.
+- `<component>.image.registry` changes a single image. A `repository` that
+  already starts with a registry host (`quay.io/org/image`) is used as-is.
+- `<component>.image.digest` (`sha256:...`) pins an exact build.
+- `imagePullSecrets` applies to every pod.
+
+## Pod options
+
+Every component (`app`, `db`, `redis`, `kodoffice`, `imaginary`,
+`milvus.etcd`, `milvus.minio`, `milvus.standalone`) takes the same settings:
+
+| Key | Purpose |
+|---|---|
+| `resources` | Requests and limits |
+| `extraEnv` | Extra environment variables, e.g. KodOffice's JWT settings |
+| `podAnnotations` / `podLabels` | Extra pod metadata |
+| `nodeSelector` / `tolerations` / `affinity` | Scheduling |
+| `topologySpreadConstraints` | Spread pods; a constraint without a `labelSelector` gets the component's pod labels |
+| `priorityClassName` | Pod priority |
+
+On first start the app waits in an init container until the database (and
+redis) accept connections, so the kodbox installer doesn't run against a
+database that is still starting. Disable with `app.waitForDependencies=false`.
+
 ## Resource sizing
 
 Every container has requests and limits (`<component>.resources`). The two
@@ -165,7 +200,10 @@ helm upgrade kodbox kodbox/kodbox -n kodbox --reset-then-reuse-values \
   --set app.replicaCount=2
 ```
 
-Replicas share the volume and keep sessions in redis. With more than one
+Replicas share the volume and keep sessions in redis. The chart refuses to
+render combinations that deploy but can't work: more than one replica without
+persistence, without a ReadWriteMany volume (unless `existingClaim` is set) or
+without redis, or a PodDisruptionBudget whose `minAvailable` blocks node drains. With more than one
 replica the chart adds a PodDisruptionBudget (`app.pdb`, minAvailable 1), and
 replicas prefer different nodes (`app.podAntiAffinity`: `soft`, `hard` or `none`).
 
@@ -203,6 +241,10 @@ To let another in-cluster service use Milvus, add it to `milvusExtraFrom`.
 | etcd / minio / milvus | `etcdctl endpoint health` / `/minio/health/*` / `/healthz` |
 
 Milvus waits for etcd and minio in an init container before starting.
+
+`helm test <release>` checks that the app answers (including a page that uses
+the database) and that KodOffice is up. CI installs the chart on a kind cluster
+and runs these tests for every pull request.
 
 ## Data and uninstall
 
@@ -247,6 +289,8 @@ their existing data.
 | `gateway.enabled` | `false` | Gateway API HTTPRoutes |
 | `ingress.enabled` | `false` | |
 | `networkPolicy.enabled` | `true` | |
+| `global.imageRegistry` | `""` | Registry for every image (mirror / pull-through cache) |
+| `app.waitForDependencies` | `true` | Wait for database and redis on start |
 | `<component>.resources` | set for every component | All containers have requests and limits |
 
 See `values.yaml` for everything else.

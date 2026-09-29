@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.2.0
+version: 0.3.0
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -27,10 +27,18 @@ annotations:
     - name: kodbox
       url: https://kodcloud.com
   artifacthub.io/changes: |
-    - kind: changed
-      description: Default app image is docker.io/kodcloud/kodbox, tag defaults to appVersion (1.68.10)
     - kind: added
-      description: Chart packages are GPG-signed
+      description: global.imageRegistry and per-image registry / digest
+    - kind: changed
+      description: image.repository no longer includes the registry (a repository with a registry host is still used as-is)
+    - kind: added
+      description: podAnnotations, podLabels, priorityClassName, topologySpreadConstraints and extraEnv for every component
+    - kind: added
+      description: App waits for the database and redis before its first start
+    - kind: added
+      description: Render fails on unsafe combinations (multiple replicas without a shared volume or redis, blocking PDB)
+    - kind: added
+      description: helm test and a CI test install on kind
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
