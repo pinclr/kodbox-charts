@@ -118,8 +118,14 @@ Every component (`app`, `db`, `redis`, `kodoffice`, `imaginary`,
 | `priorityClassName` | Pod priority |
 
 On first start the app waits in an init container until the database (and
-redis) accept connections, so the kodbox installer doesn't run against a
-database that is still starting. Disable with `app.waitForDependencies=false`.
+redis) accept connections; the image's entrypoint also waits and retries its
+installer. Disable the init container with `app.waitForDependencies=false`.
+
+**External Redis:** set `redis.enabled=false`, `externalRedis.host` and, for a
+password, `externalRedis.password` or `externalRedis.existingSecret`. Like the
+database settings, kodbox writes them into `config/setting_user.php` on the
+first start only; to change them later, edit that file in the app volume. The
+image's installer doesn't pass a port, so the Redis must listen on 6379.
 
 ## Resource sizing
 
@@ -363,6 +369,7 @@ Flux runs real Helm installs and upgrades, where `lookup` works.
 | `admin.bootstrap` / `admin.password` | `true` / generated | Initial admin, fresh installs only |
 | `database.existingSecret` | `""` | Keys `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` |
 | `db.enabled` / `externalDatabase.host` | `true` / `""` | Use an external MySQL/MariaDB |
+| `redis.enabled` / `externalRedis.host` | `true` / `""` | Use an external Redis; `externalRedis.password` or `existingSecret` for auth. Port must be 6379, applied on first start only |
 | `redis.persistence.enabled` / `size` | `true` / `2Gi` | `false` for in-memory only |
 | `kodoffice.enabled` / `imaginary.enabled` | `true` | |
 | `milvus.enabled` | `false` | etcd + minio + milvus for AI search |

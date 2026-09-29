@@ -1,0 +1,17 @@
+# CI install against an external, password-protected Redis (redis-ext, started
+# by the workflow). kodbox's installer checks the connection with the password.
+kodoffice:
+  enabled: false
+
+redis:
+  enabled: false
+
+externalRedis:
+  host: redis-ext
+  password: ci-redis-pass
+
+app:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi

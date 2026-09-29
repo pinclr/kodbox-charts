@@ -237,8 +237,16 @@ redis:
     fsGroup: 1000
   securityContext: {}
 
+## External Redis, used when redis.enabled=false. Empty host disables Redis
+## (file sessions: single replica only). Like the database, kodbox writes these
+## settings into its config on the first start only. It must listen on 6379:
+## the image's installer doesn't pass a port.
 externalRedis:
   host: ""
+  password: ""
+  # Pre-created secret holding the password (under existingSecretKey)
+  existingSecret: ""
+  existingSecretKey: REDIS_PASSWORD
 
 ## KodOffice document server. Browsers load it directly, so it needs a
 ## user-reachable URL (see ingress.kodoffice).

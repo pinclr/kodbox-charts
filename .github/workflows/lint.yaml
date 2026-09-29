@@ -50,7 +50,8 @@ jobs:
           done
 
   # Installs each changed chart on a throwaway kind cluster, once per
-  # ci/*-values.yaml, and runs `helm test`.
+  # ci/*-values.yaml, tests an upgrade from the released version, and runs
+  # `helm test`.
   install:
     needs: lint
     if: needs.lint.outputs.changed == 'true'
@@ -79,8 +80,22 @@ jobs:
             pod-security.kubernetes.io/enforce=baseline \
             pod-security.kubernetes.io/warn=restricted
 
-      - name: Install changed charts and run helm test
-        run: ct install --config ct.yaml --namespace kodbox-ci --target-branch ${{ github.event.repository.default_branch }}
+      # Password-protected Redis for ci/external-redis-values.yaml.
+      - name: Start external Redis
+        run: |
+          kubectl -n kodbox-ci create deployment redis-ext --image=redis:7-alpine --port=6379 \
+            -- redis-server --requirepass ci-redis-pass
+          kubectl -n kodbox-ci expose deployment redis-ext --port=6379
+          kubectl -n kodbox-ci rollout status deployment/redis-ext --timeout=180s
+
+      # Fresh install of each ci/*-values.yaml, then an in-place upgrade from the
+      # chart on the target branch (values files new in this change are skipped
+      # for the upgrade).
+      - name: Install and upgrade changed charts, run helm test
+        run: >-
+          ct install --config ct.yaml --namespace kodbox-ci
+          --upgrade --skip-missing-values
+          --target-branch ${{ github.event.repository.default_branch }}
 
       - name: Show cluster state on failure
         if: failure()
