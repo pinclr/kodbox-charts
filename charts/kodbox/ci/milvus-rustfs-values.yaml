@@ -1,0 +1,14 @@
+# CI install with Milvus (etcd + RustFS + milvus standalone) on top of the core
+# services, under the Pod Security "baseline" standard. Named for RustFS so the
+# upgrade test skips it: moving from MinIO needs the manual reset in the README.
+kodoffice:
+  enabled: false
+
+milvus:
+  enabled: true
+
+app:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
