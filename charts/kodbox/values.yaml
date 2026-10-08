@@ -152,9 +152,11 @@ database:
 db:
   enabled: true
   image:
-    registry: registry.cn-hangzhou.aliyuncs.com
-    repository: kodcloud/mariadb
-    tag: lts
+    # Official MariaDB image, current LTS line (12.3). Pin new patch releases
+    # here; MARIADB_AUTO_UPGRADE upgrades the data on start.
+    registry: docker.io
+    repository: library/mariadb
+    tag: "12.3.3"
     digest: ""
     pullPolicy: IfNotPresent
   args:
@@ -195,9 +197,11 @@ externalDatabase:
 redis:
   enabled: true
   image:
-    registry: registry.cn-hangzhou.aliyuncs.com
-    repository: kodcloud/redis
-    tag: alpine
+    # Official Redis image. Don't move to an older version than the data was
+    # written with: Redis can't always read newer AOF/RDB files.
+    registry: docker.io
+    repository: library/redis
+    tag: 8.10.2-alpine
     digest: ""
     pullPolicy: IfNotPresent
   # Append-only file so sessions survive redis restarts.
@@ -285,9 +289,12 @@ kodoffice:
 imaginary:
   enabled: true
   image:
-    registry: registry.cn-hangzhou.aliyuncs.com
-    repository: kodcloud/imaginary
-    tag: latest
+    # Nextcloud's maintained imaginary build (current Go and libvips on Alpine),
+    # tagged by build date: https://github.com/nextcloud/all-in-one
+    # Its entrypoint passes args through to imaginary. Runs as nobody (65534).
+    registry: docker.io
+    repository: nextcloud/aio-imaginary
+    tag: "20260929_105435"
     digest: ""
     pullPolicy: IfNotPresent
   port: 9000
@@ -314,10 +321,17 @@ imaginary:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  # The image runs as nobody, so it meets the "restricted" Pod Security Standard.
   podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
     seccompProfile:
       type: RuntimeDefault
-  securityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
 
 ## Milvus vector database stack (etcd + minio + milvus standalone), mirroring
 ## the milvus docker-compose shipped with the install. Only needed for kodbox's
