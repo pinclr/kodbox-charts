@@ -157,3 +157,4 @@ jobs:
             fi
             echo "::endgroup::"
           done
+          cat "$GITHUB_STEP_SUMMARY"
