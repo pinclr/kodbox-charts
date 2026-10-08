@@ -122,13 +122,13 @@ jobs:
 
       - uses: azure/setup-helm@v4
 
+      # Public release download; aquasecurity's IP allow list blocks token API calls.
       - name: Install Trivy
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(gh api repos/aquasecurity/trivy/releases/latest --jq .tag_name)
-          gh release download "$version" -R aquasecurity/trivy \
-            -p "trivy_${version#v}_Linux-64bit.tar.gz" -O - | sudo tar xz -C /usr/local/bin trivy
+          version=$(curl -fsSI https://github.com/aquasecurity/trivy/releases/latest \
+            | sed -n 's|^location: .*/tag/v\([0-9.]*\).*|\1|Ip' | tr -d '\r')
+          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${version}/trivy_${version}_Linux-64bit.tar.gz" \
+            | sudo tar xz -C /usr/local/bin trivy
           trivy --version
 
       - name: Scan chart images
