@@ -208,8 +208,8 @@ schema = {
             "resources": resources("Imaginary"),
             **sched("Imaginary"),
         }),
-        "milvus": obj("Milvus vector database stack (etcd + minio + milvus standalone) for AI search.", {
-            "enabled": b("Deploy etcd, minio and milvus."),
+        "milvus": obj("Milvus vector database stack (etcd + RustFS object storage + milvus standalone) for AI search.", {
+            "enabled": b("Deploy etcd, RustFS (the minio component) and milvus."),
             "etcd": obj("etcd for Milvus metadata.", {
                 "image": image("etcd"),
                 "env": {
@@ -221,13 +221,13 @@ schema = {
                 "resources": resources("etcd"),
                 **sched("etcd"),
             }),
-            "minio": obj("MinIO object storage for Milvus segments.", {
-                "image": image("MinIO"),
-                "rootUser": s("MinIO root user.", minLength=3),
-                "rootPassword": s("MinIO root password; empty generates one. At least 8 characters.", anyOf=[{"maxLength": 0}, {"minLength": 8}]),
-                "persistence": persistence("MinIO data", "/minio_data"),
-                "resources": resources("MinIO"),
-                **sched("MinIO"),
+            "minio": obj("S3 object storage for Milvus segments, indexes and WAL. Runs RustFS (S3/MinIO-compatible); keeps the name minio.", {
+                "image": image("RustFS"),
+                "rootUser": s("RustFS access key (RUSTFS_ACCESS_KEY), also used by Milvus.", minLength=3),
+                "rootPassword": s("RustFS secret key (RUSTFS_SECRET_KEY); empty generates one. At least 8 characters.", anyOf=[{"maxLength": 0}, {"minLength": 8}]),
+                "persistence": persistence("RustFS data", "/data"),
+                "resources": resources("RustFS"),
+                **sched("RustFS"),
             }),
             "standalone": obj("Milvus standalone server.", {
                 "image": image("Milvus"),
