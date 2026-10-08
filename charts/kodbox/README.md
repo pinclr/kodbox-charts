@@ -93,11 +93,17 @@ Each image has `registry`, `repository`, `tag` and `digest`:
 | Component | Default image |
 |---|---|
 | app | `docker.io/kodcloud/kodbox:<appVersion>` |
-| db, redis, kodoffice, imaginary, etcd, minio, milvus | `registry.cn-hangzhou.aliyuncs.com/kodcloud/<name>:<tag>` |
+| db | `docker.io/library/mariadb:12.3.3` (official, LTS line) |
+| redis | `docker.io/library/redis:8.10.2-alpine` (official) |
+| imaginary | `docker.io/nextcloud/aio-imaginary:<build date>` (maintained by Nextcloud) |
+| kodoffice, etcd, minio, milvus | `registry.cn-hangzhou.aliyuncs.com/kodcloud/<name>:<tag>` |
+
+Images are pinned to versions so upgrades are deliberate. Every pull request
+scans them with Trivy (see the "Image scan" job summary).
 
 - `global.imageRegistry` replaces the registry of every image, e.g. a mirror or
-  pull-through cache holding the same `kodcloud/...` paths:
-  `--set global.imageRegistry=harbor.example.com/kodcloud-mirror`.
+  pull-through cache holding the same repository paths (`library/mariadb`,
+  `kodcloud/...`): `--set global.imageRegistry=harbor.example.com/dockerhub-proxy`.
 - `<component>.image.registry` changes a single image. A `repository` that
   already starts with a registry host (`quay.io/org/image`) is used as-is.
 - `<component>.image.digest` (`sha256:...`) pins an exact build.

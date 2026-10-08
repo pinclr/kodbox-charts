@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.4.3
+version: 0.4.4
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -27,10 +27,16 @@ annotations:
     - name: kodbox
       url: https://kodcloud.com
   artifacthub.io/changes: |
+    - kind: security
+      description: MariaDB moves to the official docker.io/library/mariadb:12.3.3 image (same version as the previous kodcloud/mariadb:lts)
+    - kind: security
+      description: Redis moves to the official docker.io/library/redis:8.10.2-alpine image (same version as the previous kodcloud/redis:alpine)
+    - kind: security
+      description: Imaginary moves to Nextcloud's maintained docker.io/nextcloud/aio-imaginary build, replacing an outdated copy with critical CVEs
+    - kind: security
+      description: Imaginary runs as non-root with all capabilities dropped (Pod Security "restricted")
     - kind: added
-      description: externalRedis.password / existingSecret for password-protected external Redis
-    - kind: added
-      description: CI tests upgrades from the previous release and an external password-protected Redis
+      description: CI scans every image with Trivy and reports CRITICAL/HIGH counts
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc

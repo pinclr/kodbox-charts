@@ -108,3 +108,53 @@ jobs:
             kubectl logs -n "${pod%/*}" "${pod#*/}" --all-containers --tail=100 || true
             echo "::endgroup::"
           done
+
+  # Scans every image the chart deploys (defaults plus Milvus) with Trivy and
+  # writes a CRITICAL/HIGH summary to the job summary. Report only: some images
+  # (kodbox, kodoffice) can only be fixed upstream.
+  image-scan:
+    needs: lint
+    if: needs.lint.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      # Public release download; aquasecurity's IP allow list blocks token API calls.
+      - name: Install Trivy
+        run: |
+          version=$(curl -fsSI https://github.com/aquasecurity/trivy/releases/latest \
+            | sed -n 's|^location: .*/tag/v\([0-9.]*\).*|\1|Ip' | tr -d '\r')
+          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${version}/trivy_${version}_Linux-64bit.tar.gz" \
+            | sudo tar xz -C /usr/local/bin trivy
+          trivy --version
+
+      - name: Scan chart images
+        run: |
+          images=$(helm template scan charts/kodbox --set milvus.enabled=true \
+            | sed -n 's/^ *image: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' | sort -u)
+          {
+            echo "### Image vulnerabilities (fixable / all)"
+            echo
+            echo "| Image | Critical | High |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for image in $images; do
+            echo "::group::$image"
+            if trivy image --quiet --scanners vuln --severity CRITICAL,HIGH \
+                 --format json --output scan.json "$image"; then
+              read -r crit_fix crit high_fix high < <(jq -r '
+                [.Results[]?.Vulnerabilities[]?] as $v
+                | [($v | map(select(.Severity=="CRITICAL" and .FixedVersion)) | length),
+                   ($v | map(select(.Severity=="CRITICAL")) | length),
+                   ($v | map(select(.Severity=="HIGH" and .FixedVersion)) | length),
+                   ($v | map(select(.Severity=="HIGH")) | length)] | @tsv' scan.json)
+              echo "| \`$image\` | $crit_fix / $crit | $high_fix / $high |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$image\` | scan failed | |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "::endgroup::"
+          done
+          cat "$GITHUB_STEP_SUMMARY"
