@@ -333,7 +333,7 @@ imaginary:
     capabilities:
       drop: ["ALL"]
 
-## Milvus vector database stack (etcd + minio + milvus standalone), mirroring
+## Milvus vector database stack (etcd + RustFS object storage + milvus standalone), mirroring
 ## the milvus docker-compose shipped with the install. Only needed for kodbox's
 ## AI / semantic search features, so off by default.
 milvus:
@@ -388,8 +388,9 @@ milvus:
       tag: 1.0.1
       digest: ""
       pullPolicy: IfNotPresent
+    # RustFS access key and secret key (Milvus uses the same credentials).
     rootUser: minioadmin
-    # Left empty, a random password is generated on install and kept across upgrades.
+    # Left empty, a random secret key is generated on install and kept across upgrades.
     rootPassword: ""
     persistence:
       storageClass: ""
@@ -463,7 +464,7 @@ milvus:
     securityContext: {}
 
 ## NetworkPolicies restricting who can reach the backing services:
-## db/redis/imaginary from the app, etcd/minio from milvus, milvus from the app.
+## db/redis/imaginary from the app, etcd/RustFS (minio) from milvus, milvus from the app.
 ## The app and kodoffice stay open because the gateway proxies to them.
 networkPolicy:
   enabled: true

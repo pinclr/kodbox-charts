@@ -19,7 +19,7 @@ example production setup: 2–8 autoscaled app replicas on a shared ReadWriteMan
 larger resources, pre-created secrets, Milvus and Gateway API routing.
 
 Each component except `app` can be turned off with `<component>.enabled=false`
-(`milvus.enabled` covers etcd, minio and milvus).
+(`milvus.enabled` covers etcd, RustFS (the `minio` component) and milvus).
 
 ## Install
 
@@ -162,7 +162,7 @@ Enabling Milvus (`milvus.enabled=true`) with the default sizes adds:
 | Service | CPU request | CPU limit | Memory request | Memory limit | Storage |
 |---|---|---|---|---|---|
 | etcd | 100m | 1 | 256Mi | 2Gi | 4Gi RWO |
-| minio | 100m | 1 | 256Mi | 2Gi | 8Gi RWO |
+| minio (RustFS) | 100m | 1 | 256Mi | 2Gi | 8Gi RWO |
 | milvus standalone | 500m | 4 | 2Gi | 8Gi | 8Gi RWO |
 | **Milvus subtotal** | **0.7** | **6** | **2.5Gi** | **12Gi** | **20Gi** |
 
@@ -180,7 +180,7 @@ on. Totals are at the minimum of 2 app replicas; each extra replica adds
 | kodoffice | 1 | 500m | 8 | 1Gi | 16Gi | – |
 | imaginary | 1 | 500m | 4 | 512Mi | 8Gi | – |
 | etcd | 1 | 100m | 1 | 256Mi | 2Gi | 10Gi RWO |
-| minio | 1 | 100m | 1 | 256Mi | 2Gi | 80Gi RWO |
+| minio (RustFS) | 1 | 100m | 1 | 256Mi | 2Gi | 80Gi RWO |
 | milvus standalone | 1 | 500m | 4 | 2Gi | 8Gi | 40Gi RWO |
 | **Total** | | **4.25** | **31** | **~9.1Gi** | **58Gi** | **250Gi RWX + 190Gi RWO** |
 
@@ -252,7 +252,7 @@ Always upgrade with `--reset-then-reuse-values`. Plain `--reuse-values` reuses
 only the values stored at install time, so defaults added to the chart later
 are missing and templates can fail to render.
 
-Generated passwords (database, minio, admin) are read back from the existing
+Generated passwords (database, RustFS, admin) are read back from the existing
 Secrets on upgrade and don't change.
 
 ### Milvus: MinIO to RustFS (0.5.0)
@@ -290,7 +290,7 @@ To grow a volume, the storage class needs `allowVolumeExpansion: true`.
 Volumes can grow but never shrink.
 
 - **App volume:** a plain PVC, so raise `app.persistence.size` and upgrade.
-- **StatefulSet volumes** (db, redis, etcd, minio, milvus): expand the PVC
+- **StatefulSet volumes** (db, redis, etcd, minio/RustFS, milvus): expand the PVC
   itself (`kubectl edit pvc data-<release>-db-0`) and set the same size in values.
 
 **Automatic growth:** Kubernetes can't grow volumes by itself; an add-on such as
@@ -308,7 +308,7 @@ the size in values to match: an upgrade to a smaller size than the live one fail
 | Service | Allowed from |
 |---|---|
 | db, redis, imaginary | app |
-| etcd, minio | milvus |
+| etcd, minio (RustFS) | milvus |
 | milvus | app, plus `networkPolicy.milvusExtraFrom` |
 
 The app and kodoffice are not restricted, because the gateway proxies to them.
@@ -325,7 +325,7 @@ To let another in-cluster service use Milvus, add it to `milvusExtraFrom`.
 | imaginary | `GET /health` |
 | etcd / minio (RustFS) / milvus | `etcdctl endpoint health` / `/health`, `/health/ready` / `/healthz` |
 
-Milvus waits for etcd and minio in an init container before starting.
+Milvus waits for etcd and RustFS in an init container before starting.
 
 `helm test <release>` checks that the app answers (including a page that uses
 the database) and that KodOffice is up. CI installs the chart on a kind cluster
@@ -336,7 +336,7 @@ and runs these tests for every pull request.
 Uninstalling the release does **not** delete data:
 
 - The app volume is annotated `helm.sh/resource-policy: keep`.
-- The db, redis, etcd, minio and milvus StatefulSets use
+- The db, redis, etcd, minio (RustFS) and milvus StatefulSets use
   `persistentVolumeClaimRetentionPolicy: Retain`.
 
 A reinstall with the same release name and namespace picks the volumes up again.
@@ -381,7 +381,7 @@ credentials instead of generating them:
 
 - `database.existingSecret` and `admin.existingSecret`, pre-created (e.g. with
   External Secrets or Sealed Secrets), and
-- `milvus.minio.rootPassword` when Milvus is enabled.
+- `milvus.minio.rootPassword` (the RustFS secret key) when Milvus is enabled.
 
 Flux runs real Helm installs and upgrades, where `lookup` works.
 

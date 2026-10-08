@@ -1004,11 +1004,11 @@
     },
     "milvus": {
       "type": "object",
-      "description": "Milvus vector database stack (etcd + minio + milvus standalone) for AI search.",
+      "description": "Milvus vector database stack (etcd + RustFS object storage + milvus standalone) for AI search.",
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Deploy etcd, minio and milvus."
+          "description": "Deploy etcd, RustFS (the minio component) and milvus."
         },
         "etcd": {
           "type": "object",
@@ -1154,11 +1154,11 @@
         },
         "minio": {
           "type": "object",
-          "description": "MinIO object storage for Milvus segments.",
+          "description": "S3 object storage for Milvus segments, indexes and WAL. Runs RustFS (S3/MinIO-compatible); keeps the name minio.",
           "properties": {
             "image": {
               "type": "object",
-              "description": "Container image for MinIO.",
+              "description": "Container image for RustFS.",
               "properties": {
                 "registry": {
                   "type": "string",
@@ -1197,12 +1197,12 @@
             },
             "rootUser": {
               "type": "string",
-              "description": "MinIO root user.",
+              "description": "RustFS access key (RUSTFS_ACCESS_KEY), also used by Milvus.",
               "minLength": 3
             },
             "rootPassword": {
               "type": "string",
-              "description": "MinIO root password; empty generates one. At least 8 characters.",
+              "description": "RustFS secret key (RUSTFS_SECRET_KEY); empty generates one. At least 8 characters.",
               "anyOf": [
                 {
                   "maxLength": 0
@@ -1214,7 +1214,7 @@
             },
             "persistence": {
               "type": "object",
-              "description": "Storage for MinIO data, mounted at /minio_data.",
+              "description": "Storage for RustFS data, mounted at /data.",
               "properties": {
                 "storageClass": {
                   "type": "string",
@@ -1236,7 +1236,7 @@
                 },
                 "size": {
                   "type": "string",
-                  "description": "Volume size for MinIO data.",
+                  "description": "Volume size for RustFS data.",
                   "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
                 }
               },
@@ -1244,35 +1244,35 @@
             },
             "resources": {
               "type": "object",
-              "description": "Kubernetes resource requests and limits for MinIO."
+              "description": "Kubernetes resource requests and limits for RustFS."
             },
             "nodeSelector": {
               "type": "object",
-              "description": "Node labels for scheduling MinIO."
+              "description": "Node labels for scheduling RustFS."
             },
             "tolerations": {
               "type": "array",
-              "description": "Tolerations for MinIO pods."
+              "description": "Tolerations for RustFS pods."
             },
             "affinity": {
               "type": "object",
-              "description": "Affinity rules for MinIO pods."
+              "description": "Affinity rules for RustFS pods."
             },
             "podAnnotations": {
               "type": "object",
-              "description": "Extra annotations for MinIO pods."
+              "description": "Extra annotations for RustFS pods."
             },
             "podLabels": {
               "type": "object",
-              "description": "Extra labels for MinIO pods."
+              "description": "Extra labels for RustFS pods."
             },
             "priorityClassName": {
               "type": "string",
-              "description": "PriorityClass for MinIO pods."
+              "description": "PriorityClass for RustFS pods."
             },
             "topologySpreadConstraints": {
               "type": "array",
-              "description": "Topology spread constraints for MinIO pods; a missing labelSelector is filled with the pod's labels."
+              "description": "Topology spread constraints for RustFS pods; a missing labelSelector is filled with the pod's labels."
             },
             "extraEnv": {
               "type": "array",
@@ -1287,15 +1287,15 @@
                   "name"
                 ]
               },
-              "description": "Extra environment variables for the MinIO container."
+              "description": "Extra environment variables for the RustFS container."
             },
             "podSecurityContext": {
               "type": "object",
-              "description": "Pod security context for MinIO pods."
+              "description": "Pod security context for RustFS pods."
             },
             "securityContext": {
               "type": "object",
-              "description": "Container security context for MinIO containers."
+              "description": "Container security context for RustFS containers."
             }
           },
           "additionalProperties": false
