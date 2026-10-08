@@ -1,6 +1,20 @@
 {{- if .Values.milvus.enabled }}
 {{- $sel := dict "ctx" . "component" "minio" "v" .Values.milvus.minio }}
 {{- $v := .Values.milvus.minio }}
+{{- /*
+S3 object storage for Milvus. The component keeps the name "minio" (service,
+values, Milvus' minio.* settings), but runs RustFS since chart 0.5.0: MinIO's
+community images are gone. RustFS can't use MinIO's data, so an upgrade with
+the old MinIO StatefulSet still in place is refused; see README "Upgrades".
+*/}}
+{{- $name := include "kodbox.componentName" $sel }}
+{{- $old := lookup "apps/v1" "StatefulSet" .Release.Namespace $name }}
+{{- if $old }}
+{{- $oldImage := (first $old.spec.template.spec.containers).image }}
+{{- if contains "minio" (regexReplaceAll ".*/" $oldImage "") }}
+{{- fail (printf "Milvus object storage moves from MinIO to RustFS in this chart version and needs a one-time reset of the Milvus stack (StatefulSet %s still runs %s). Follow the chart README, 'Upgrades' > 'Milvus: MinIO to RustFS', first." $name $oldImage) }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -51,14 +65,25 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
           env:
-            - name: MINIO_ROOT_USER
+            # Data in a subdirectory of the volume, owned by the rustfs user.
+            - name: RUSTFS_VOLUMES
+              value: /data/rustfs
+            - name: RUSTFS_ADDRESS
+              value: 0.0.0.0:9000
+            - name: RUSTFS_CONSOLE_ENABLE
+              value: "true"
+            - name: RUSTFS_CONSOLE_ADDRESS
+              value: 0.0.0.0:9001
+            # Empty: log to stdout instead of files in the container.
+            - name: RUSTFS_OBS_LOG_DIRECTORY
+              value: ""
+            - name: RUSTFS_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
                   key: MINIO_ROOT_USER
-            - name: MINIO_ROOT_PASSWORD
+            - name: RUSTFS_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
@@ -73,18 +98,18 @@ spec:
               containerPort: 9001
           livenessProbe:
             httpGet:
-              path: /minio/health/live
+              path: /health
               port: api
             periodSeconds: 30
             timeoutSeconds: 20
           readinessProbe:
             httpGet:
-              path: /minio/health/ready
+              path: /health/ready
               port: api
             periodSeconds: 10
           volumeMounts:
             - name: data
-              mountPath: /minio_data
+              mountPath: /data
           {{- with $v.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

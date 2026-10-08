@@ -341,9 +341,10 @@ milvus:
 
   etcd:
     image:
-      registry: registry.cn-hangzhou.aliyuncs.com
-      repository: kodcloud/etcd
-      tag: v3.5.25
+      # Official etcd image, newest patch of the 3.5 line Milvus tests with.
+      registry: quay.io
+      repository: coreos/etcd
+      tag: v3.5.34
       digest: ""
       pullPolicy: IfNotPresent
     env:
@@ -377,11 +378,14 @@ milvus:
         type: RuntimeDefault
     securityContext: {}
 
+  # S3 object storage for Milvus. Runs RustFS (https://github.com/rustfs/rustfs),
+  # an S3/MinIO-compatible server: MinIO's community edition is archived and its
+  # images were removed. Keeps the "minio" name for compatibility.
   minio:
     image:
-      registry: registry.cn-hangzhou.aliyuncs.com
-      repository: kodcloud/minio
-      tag: RELEASE.2024-12-18T13-15-44Z
+      registry: docker.io
+      repository: rustfs/rustfs
+      tag: 1.0.1
       digest: ""
       pullPolicy: IfNotPresent
     rootUser: minioadmin
@@ -407,16 +411,25 @@ milvus:
     priorityClassName: ""
     topologySpreadConstraints: []
     extraEnv: []
+    # RustFS runs as uid 10001; fsGroup makes the volume writable for it.
     podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      fsGroup: 10001
       seccompProfile:
         type: RuntimeDefault
-    securityContext: {}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
 
   standalone:
     image:
-      registry: registry.cn-hangzhou.aliyuncs.com
-      repository: kodcloud/milvus
-      tag: v2.6.7
+      # Official Milvus image, newest 2.6 release.
+      registry: docker.io
+      repository: milvusdb/milvus
+      tag: v2.6.25
       digest: ""
       pullPolicy: IfNotPresent
     mqType: woodpecker

@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.4.4
+version: 0.5.0
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -28,15 +28,13 @@ annotations:
       url: https://kodcloud.com
   artifacthub.io/changes: |
     - kind: security
-      description: MariaDB moves to the official docker.io/library/mariadb:12.3.3 image (same version as the previous kodcloud/mariadb:lts)
+      description: etcd moves to the official quay.io/coreos/etcd:v3.5.34 (was a kodcloud mirror of v3.5.25)
     - kind: security
-      description: Redis moves to the official docker.io/library/redis:8.10.2-alpine image (same version as the previous kodcloud/redis:alpine)
+      description: Milvus moves to the official docker.io/milvusdb/milvus:v2.6.25 (was a kodcloud mirror of v2.6.7)
+    - kind: changed
+      description: Milvus object storage runs RustFS 1.0.1 instead of MinIO, whose community images were removed; existing Milvus installs need a one-time reset (README "Upgrades")
     - kind: security
-      description: Imaginary moves to Nextcloud's maintained docker.io/nextcloud/aio-imaginary build, replacing an outdated copy with critical CVEs
-    - kind: security
-      description: Imaginary runs as non-root with all capabilities dropped (Pod Security "restricted")
-    - kind: added
-      description: CI scans every image with Trivy and reports CRITICAL/HIGH counts
+      description: RustFS runs as non-root with all capabilities dropped (Pod Security "restricted")
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc

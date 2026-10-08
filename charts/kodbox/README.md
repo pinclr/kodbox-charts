@@ -11,7 +11,7 @@ install:
 | `redis` | StatefulSet | sessions and cache (append-only persistence) | 2Gi RWO |
 | `kodoffice` | Deployment | Office document server (browser-facing) | none |
 | `imaginary` | Deployment | thumbnails / image processing | none |
-| `etcd`, `minio`, `milvus` | StatefulSets | Milvus vector database for AI search (off by default) | 4Gi / 8Gi / 8Gi RWO |
+| `etcd`, `minio`, `milvus` | StatefulSets | Milvus vector database for AI search (off by default); `minio` runs RustFS (S3) | 4Gi / 8Gi / 8Gi RWO |
 
 The defaults are a minimal single-replica, non-HA install on the cluster's
 default storage class. [`values-production.yaml`](values-production.yaml) is an
@@ -96,7 +96,10 @@ Each image has `registry`, `repository`, `tag` and `digest`:
 | db | `docker.io/library/mariadb:12.3.3` (official, LTS line) |
 | redis | `docker.io/library/redis:8.10.2-alpine` (official) |
 | imaginary | `docker.io/nextcloud/aio-imaginary:<build date>` (maintained by Nextcloud) |
-| kodoffice, etcd, minio, milvus | `registry.cn-hangzhou.aliyuncs.com/kodcloud/<name>:<tag>` |
+| etcd | `quay.io/coreos/etcd:v3.5.34` (official) |
+| minio | `docker.io/rustfs/rustfs:1.0.1` (S3/MinIO-compatible; MinIO's community images were removed) |
+| milvus | `docker.io/milvusdb/milvus:v2.6.25` (official) |
+| kodoffice | `registry.cn-hangzhou.aliyuncs.com/kodcloud/kodoffice:7.4.1.1` (only published by kodcloud) |
 
 Images are pinned to versions so upgrades are deliberate. Every pull request
 scans them with Trivy (see the "Image scan" job summary).
@@ -197,7 +200,7 @@ kodoffice alone may burst to 16Gi and needs a node with that much free.
 | kodoffice | Concurrent editing sessions, document size | OOMKilled, editor fails to open or save | Memory limit (plan ~1Gi per few concurrent editors); CPU for conversion |
 | imaginary | Image size and concurrency (`-concurrency 10`, `-max-allowed-resolution 500` MP) | OOMKilled on large photos, slow thumbnails | Memory limit, or lower `-concurrency` / max resolution in `imaginary.args` |
 | milvus | Number of indexed documents (vectors held in memory) | OOMKilled, slow AI search | Memory limit; storage for segments |
-| minio | Milvus segment and index files | PVC filling up | `milvus.minio.persistence.size` |
+| minio (RustFS) | Milvus segment, index and WAL files | PVC filling up | `milvus.minio.persistence.size` |
 | etcd | Milvus metadata (small) | Alarms about the backend quota (`ETCD_QUOTA_BACKEND_BYTES`: 2 GiB default, 4 GiB in production) | Keep the quota well below the volume size |
 
 ## Scaling
@@ -252,6 +255,26 @@ are missing and templates can fail to render.
 Generated passwords (database, minio, admin) are read back from the existing
 Secrets on upgrade and don't change.
 
+### Milvus: MinIO to RustFS (0.5.0)
+
+From 0.5.0 Milvus' object storage (the `minio` component) runs RustFS instead of
+MinIO, whose community edition is archived and whose images were removed from
+Docker Hub and quay.io. RustFS can't read MinIO's data, and Milvus keeps its
+segments and write-ahead log there, so the Milvus stack starts over. kodbox's
+files are not affected; only the AI search index has to be rebuilt.
+
+If `milvus.enabled=true`, before upgrading (release `kodbox` in namespace
+`kodbox`; the upgrade refuses to run while the old MinIO StatefulSet exists):
+
+```bash
+kubectl -n kodbox delete statefulset kodbox-etcd kodbox-minio kodbox-milvus
+kubectl -n kodbox delete pvc data-kodbox-etcd-0 data-kodbox-minio-0 data-kodbox-milvus-0
+helm upgrade kodbox kodbox/kodbox -n kodbox --reset-then-reuse-values  # plus your -f / --set
+```
+
+Then rebuild the index from kodbox's AI search settings (re-index the files).
+With Milvus disabled there is nothing to do.
+
 **StatefulSet volume sizes can't be changed by an upgrade** (Kubernetes rejects
 changes to `volumeClaimTemplates`). 0.4.0 lowered the Milvus defaults (etcd
 5Gi→4Gi, minio 50Gi→8Gi, milvus 20Gi→8Gi): if Milvus runs on the old defaults,
@@ -300,7 +323,7 @@ To let another in-cluster service use Milvus, add it to `milvusExtraFrom`.
 | redis | `redis-cli ping` |
 | kodoffice | `GET /healthcheck` |
 | imaginary | `GET /health` |
-| etcd / minio / milvus | `etcdctl endpoint health` / `/minio/health/*` / `/healthz` |
+| etcd / minio (RustFS) / milvus | `etcdctl endpoint health` / `/health`, `/health/ready` / `/healthz` |
 
 Milvus waits for etcd and minio in an init container before starting.
 
@@ -378,7 +401,7 @@ Flux runs real Helm installs and upgrades, where `lookup` works.
 | `redis.enabled` / `externalRedis.host` | `true` / `""` | Use an external Redis; `externalRedis.password` or `existingSecret` for auth. Port must be 6379, applied on first start only |
 | `redis.persistence.enabled` / `size` | `true` / `2Gi` | `false` for in-memory only |
 | `kodoffice.enabled` / `imaginary.enabled` | `true` | |
-| `milvus.enabled` | `false` | etcd + minio + milvus for AI search |
+| `milvus.enabled` | `false` | etcd + RustFS (`minio`) + milvus for AI search |
 | `gateway.enabled` | `false` | Gateway API HTTPRoutes |
 | `ingress.enabled` | `false` | |
 | `networkPolicy.enabled` | `true` | |
