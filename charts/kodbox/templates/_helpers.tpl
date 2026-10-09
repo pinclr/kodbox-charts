@@ -50,6 +50,16 @@ app.kubernetes.io/component: {{ .component }}
 {{- end }}
 {{- end }}
 
+{{/* Whether the document server uses JWT: explicit kodoffice.jwt.enabled, else on for onlyoffice. */}}
+{{- define "kodbox.kodofficeJwt" -}}
+{{- $jwt := .Values.kodoffice.jwt.enabled }}
+{{- if kindIs "bool" $jwt }}{{ ternary "true" "" $jwt }}{{ else if eq .Values.kodoffice.edition "onlyoffice" }}true{{ end }}
+{{- end }}
+
+{{- define "kodbox.kodofficeJwtSecretName" -}}
+{{- default (printf "%s-kodoffice" (include "kodbox.fullname" .)) .Values.kodoffice.jwt.existingSecret }}
+{{- end }}
+
 {{- define "kodbox.adminSecretName" -}}
 {{- default (printf "%s-admin" (include "kodbox.fullname" .)) .Values.admin.existingSecret }}
 {{- end }}

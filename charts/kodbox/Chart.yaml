@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.5.1
+version: 0.6.0
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -27,8 +27,12 @@ annotations:
     - name: kodbox
       url: https://kodcloud.com
   artifacthub.io/changes: |
-    - kind: changed
-      description: Docs and values reference describe Milvus object storage as RustFS (the minio component) instead of MinIO
+    - kind: added
+      description: kodoffice.edition=onlyoffice runs upstream ONLYOFFICE Document Server 9.4.0.1 instead of kodcloud's kodoffice 7.4 build
+    - kind: added
+      description: kodoffice.jwt with a generated, persisted secret (on by default for onlyoffice); install notes print it
+    - kind: added
+      description: kodoffice.onlyoffice.config and allowPrivateIpAddress reproduce kodoffice's limits for kodbox
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc

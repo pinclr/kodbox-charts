@@ -1,0 +1,10 @@
+# CI install with upstream ONLYOFFICE Document Server as the document server
+# (JWT on, config overrides mounted). helm test checks its /healthcheck.
+kodoffice:
+  edition: onlyoffice
+
+app:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
