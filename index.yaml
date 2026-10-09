@@ -4,6 +4,48 @@ entries:
   - annotations:
       artifacthub.io/category: storage
       artifacthub.io/changes: |
+        - kind: added
+          description: kodoffice.edition=onlyoffice runs upstream ONLYOFFICE Document Server 9.4.0.1 instead of kodcloud's kodoffice 7.4 build
+        - kind: added
+          description: kodoffice.jwt with a generated, persisted secret (on by default for onlyoffice); install notes print it
+        - kind: added
+          description: kodoffice.onlyoffice.config and allowPrivateIpAddress reproduce kodoffice's limits for kodbox
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/pinclr/kodbox-charts
+        - name: kodbox
+          url: https://kodcloud.com
+      artifacthub.io/signKey: |
+        fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
+        url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
+    apiVersion: v2
+    appVersion: 1.68.10
+    created: "2026-10-09T00:19:18.818578181Z"
+    description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
+    digest: f0b74eb12020e8838f69dc2b184529570f087001bde855b704c53a8ff685b36e
+    home: https://github.com/pinclr/kodbox-charts
+    icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
+    keywords:
+    - kodbox
+    - file-manager
+    - cloud-storage
+    - office
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: pinclr
+      url: https://github.com/pinclr
+    name: kodbox
+    sources:
+    - https://github.com/pinclr/kodbox-charts
+    - https://github.com/kalcaddle/kodbox
+    type: application
+    urls:
+    - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.6.0/kodbox-0.6.0.tgz
+    version: 0.6.0
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |
         - kind: changed
           description: Docs and values reference describe Milvus object storage as RustFS (the minio component) instead of MinIO
       artifacthub.io/license: Apache-2.0
@@ -491,4 +533,4 @@ entries:
     urls:
     - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.0/kodbox-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-08T23:59:01.064905389Z"
+generated: "2026-10-09T00:19:18.818665567Z"
