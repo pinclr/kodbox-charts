@@ -147,6 +147,16 @@ Environment list items added to every component's main container: TZ from
 {{- end }}
 {{- end }}
 
+{{/*
+Extra sidecar containers appended after a component's main container, e.g. a
+metrics exporter. Call with (dict "v" .Values.<component>).
+*/}}
+{{- define "kodbox.extraContainers" -}}
+{{- with .v.extraContainers }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}
+
 {{/* Backup image: backup.image fields, falling back to db.image. */}}
 {{- define "kodbox.backupImage" -}}
 {{- $b := .Values.backup.image }}

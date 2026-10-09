@@ -182,6 +182,7 @@ schema = {
                 "existingClaim": s("Existing PVC instead of the StatefulSet's volume; new installs only."),
             }),
             "resources": resources("MariaDB"),
+            "extraContainers": free("Extra sidecar containers for MariaDB, e.g. mysqld_exporter.", "array"),
             **sched("MariaDB"),
         }),
         "externalDatabase": obj("External MySQL/MariaDB, used when db.enabled=false.", {
@@ -219,6 +220,7 @@ schema = {
                 "existingClaim": s("Existing PVC instead of the StatefulSet's volume; new installs only."),
             }),
             "resources": resources("Redis"),
+            "extraContainers": free("Extra sidecar containers for Redis, e.g. redis_exporter.", "array"),
             **sched("Redis"),
         }),
         "externalRedis": obj("External Redis, used when redis.enabled=false. Empty host disables Redis. Applied on kodbox's first start only; must listen on 6379.", {
