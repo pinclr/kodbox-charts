@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.7.0
+version: 0.7.1
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -27,20 +27,7 @@ annotations:
     - name: kodbox
       url: https://kodcloud.com
   artifacthub.io/changes: |
-    - kind: added
-      description: Database backups (backup.*, on in values-production.yaml), nightly mariadb-dump to a 20Gi volume keeping 14 dumps; restore documented and tested in CI
-    - kind: added
-      description: Overridable liveness/readiness/startup probes for every component
-    - kind: added
-      description: metadata.namespace on every resource and namespaceOverride
-    - kind: added
-      description: db.persistence.existingClaim and redis.persistence.existingClaim
-    - kind: added
-      description: Releases also published to oci://ghcr.io/pinclr/charts/kodbox, signed with cosign
-    - kind: added
-      description: Generated values reference in the README
-    - kind: fixed
-      description: RustFS and Milvus no longer restart when unrelated milvus.minio values change
+      description: app.extraVolumes and app.extraVolumeMounts add extra volumes/mounts to the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf to enable their status pages for monitoring
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc

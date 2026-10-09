@@ -278,6 +278,14 @@
           "type": "object",
           "description": "Kubernetes resource requests and limits for the app."
         },
+        "extraVolumes": {
+          "type": "array",
+          "description": "Extra volumes on the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf."
+        },
+        "extraVolumeMounts": {
+          "type": "array",
+          "description": "Extra volume mounts on the app container, pairing with app.extraVolumes."
+        },
         "nodeSelector": {
           "type": "object",
           "description": "Node labels for scheduling the app."

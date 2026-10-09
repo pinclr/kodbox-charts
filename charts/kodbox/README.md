@@ -195,6 +195,12 @@ On first start the app waits in an init container until the database (and
 redis) accept connections; the image's entrypoint also waits and retries its
 installer. Disable the init container with `app.waitForDependencies=false`.
 
+**App-only:** `app.extraVolumes` / `app.extraVolumeMounts` add extra volumes
+to the pod and mounts on the app container, e.g. a ConfigMap overriding
+`nginx.conf` or php-fpm's `www.conf` to enable their status pages for
+monitoring (neither the image nor this chart expose a narrower hook for
+that today).
+
 **External Redis:** set `redis.enabled=false`, `externalRedis.host` and, for a
 password, `externalRedis.password` or `externalRedis.existingSecret`. Like the
 database settings, kodbox writes them into `config/setting_user.php` on the
@@ -661,6 +667,8 @@ Kodbox application (nginx + php-fpm, port 80).
 | `app.persistence.annotations` | object | `{}` | Extra PVC annotations, e.g. for pvc-autoresizer. |
 | `app.waitForDependencies` | boolean | `true` | Wait for the database and redis to accept connections before starting kodbox. |
 | `app.resources` | object | `{"requests": {"cpu": "250m", "memory": "512Mi"}, "limits"...` | Kubernetes resource requests and limits for the app. |
+| `app.extraVolumes` | array | `[]` | Extra volumes on the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf. |
+| `app.extraVolumeMounts` | array | `[]` | Extra volume mounts on the app container, pairing with app.extraVolumes. |
 | `app.nodeSelector` | object | `{}` | Node labels for scheduling the app. |
 | `app.tolerations` | array | `[]` | Tolerations for the app pods. |
 | `app.affinity` | object | `{}` | Affinity rules for the app pods. |

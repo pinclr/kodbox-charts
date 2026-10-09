@@ -96,6 +96,19 @@ app:
   #  - name: TZ
   #    value: Asia/Shanghai
 
+  # Extra volumes on the pod and mounts on the app container, e.g. a
+  # ConfigMap overriding nginx.conf or php-fpm's www.conf to enable their
+  # status pages for monitoring.
+  extraVolumes: []
+  #  - name: nginx-status-conf
+  #    configMap:
+  #      name: kodbox-nginx-status-conf
+  extraVolumeMounts: []
+  #  - name: nginx-status-conf
+  #    mountPath: /etc/nginx/nginx.conf
+  #    subPath: nginx.conf
+  #    readOnly: true
+
   resources:
     requests:
       cpu: 250m
