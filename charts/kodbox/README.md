@@ -400,7 +400,8 @@ and runs these tests for every pull request.
 
 ## Backups
 
-`backup.enabled` (default `true`) runs `mariadb-dump` of the kodbox database,
+`backup.enabled` (off by default, on in `values-production.yaml`) runs
+`mariadb-dump` of the kodbox database,
 bundled or external, every night at 02:00 (`backup.schedule`, in `timezone`
 when set). Each run writes a gzipped dump to its own 20Gi volume
 (`<release>-backup`, `backup.persistence`) and keeps the newest 14
@@ -413,6 +414,13 @@ What it doesn't cover:
   (e.g. CephFS snapshots). Restore files and database from the same point in time.
 - **Off-site copies.** The dumps sit in the same cluster and storage; copy them
   elsewhere regularly.
+
+**Storage classes that bind on first use** (`volumeBindingMode:
+WaitForFirstConsumer`, the default on EKS, GKE and AKS): the backup volume
+stays `Pending` until the first backup runs, so `helm install --wait` or
+`helm upgrade --wait` times out. Either use a class with `Immediate` binding
+for `backup.persistence.storageClass`, install without `--wait` and trigger a
+first backup (below), or point `backup.persistence.existingClaim` at a bound PVC.
 
 A dump is roughly 10-20% of the database size, so 14 dumps of a 5GB database
 need about 10-15GB. Check the job log: each run ends with `df -h /backup`.
@@ -738,7 +746,7 @@ Scheduled mariadb-dump of the kodbox database onto a dedicated volume.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `backup.enabled` | boolean | `true` | Create the backup CronJob and volume. |
+| `backup.enabled` | boolean | `false` | Create the backup CronJob and volume. Off by default; see README for WaitForFirstConsumer storage. |
 | `backup.schedule` | string | `"0 2 * * *"` | Cron schedule, in timezone when set (else UTC). |
 | `backup.keep` | integer | `14` | Number of dumps to keep. |
 | `backup.extraArgs` | array | `[]` | Extra mariadb-dump options, e.g. --skip-ssl for an external server without TLS. |

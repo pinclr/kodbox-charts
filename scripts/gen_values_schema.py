@@ -184,7 +184,7 @@ schema = {
             "port": port("Database port."),
         }),
         "backup": obj("Scheduled mariadb-dump of the kodbox database onto a dedicated volume.", {
-            "enabled": b("Create the backup CronJob and volume."),
+            "enabled": b("Create the backup CronJob and volume. Off by default; see README for WaitForFirstConsumer storage."),
             "schedule": s("Cron schedule, in timezone when set (else UTC).", minLength=1),
             "keep": {"type": "integer", "minimum": 1, "description": "Number of dumps to keep."},
             "extraArgs": {"type": "array", "items": {"type": "string"}, "description": "Extra mariadb-dump options, e.g. --skip-ssl for an external server without TLS."},

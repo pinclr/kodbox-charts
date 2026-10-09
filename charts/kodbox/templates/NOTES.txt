@@ -22,6 +22,15 @@ The admin account is NOT set yet: the first person to open the site
 creates it, so open it and set the admin password right away.
 {{- end }}
 
+{{- if .Values.backup.enabled }}
+Database backups: nightly at "{{ .Values.backup.schedule }}"{{ with .Values.timezone }} ({{ . }}){{ end }}, newest {{ .Values.backup.keep }} kept
+  on volume {{ include "kodbox.componentName" (dict "ctx" . "component" "backup") }}. Run one now:
+  kubectl -n {{ include "kodbox.namespace" . }} create job backup-manual-$(date +%s) --from=cronjob/{{ include "kodbox.componentName" (dict "ctx" . "component" "backup") }}
+{{- else }}
+WARNING: database backups are off. Set backup.enabled=true (README "Backups")
+or back up the database another way.
+{{- end }}
+
 Database (for reference / backups):
   host:     {{ include "kodbox.dbHost" . }}:{{ include "kodbox.dbPort" . }}
   database: {{ .Values.database.name }}

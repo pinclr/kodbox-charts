@@ -28,7 +28,7 @@ annotations:
       url: https://kodcloud.com
   artifacthub.io/changes: |
     - kind: added
-      description: Nightly database backups (backup.*), mariadb-dump to a 20Gi volume keeping 14 dumps; restore documented and tested in CI
+      description: Database backups (backup.*, on in values-production.yaml), nightly mariadb-dump to a 20Gi volume keeping 14 dumps; restore documented and tested in CI
     - kind: added
       description: Overridable liveness/readiness/startup probes for every component
     - kind: added

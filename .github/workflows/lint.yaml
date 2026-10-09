@@ -118,7 +118,7 @@ jobs:
           kubectl create namespace $ns
           helm install bk charts/kodbox -n $ns \
             --set kodoffice.enabled=false --set imaginary.enabled=false \
-            --set backup.keep=2 --set timezone=Asia/Shanghai
+            --set backup.enabled=true --set backup.keep=2 --set timezone=Asia/Shanghai
           kubectl -n $ns rollout status statefulset/bk-kodbox-db --timeout=300s
           db "CREATE TABLE ci_marker (v VARCHAR(32)); INSERT INTO ci_marker VALUES ('restored-ok');"
 
@@ -160,6 +160,9 @@ jobs:
           [ "$(db 'SELECT v FROM ci_marker;')" = "restored-ok" ] \
             || { echo "::error::marker row missing after restore"; exit 1; }
           echo "backup and restore OK"
+          kubectl -n $ns scale deployment/bk-kodbox-app --replicas=1
+          kubectl -n $ns rollout status deployment/bk-kodbox-app --timeout=600s
+          helm test bk -n $ns --logs
 
       - name: Show cluster state on failure
         if: failure()

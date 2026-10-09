@@ -599,7 +599,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Create the backup CronJob and volume."
+          "description": "Create the backup CronJob and volume. Off by default; see README for WaitForFirstConsumer storage."
         },
         "schedule": {
           "type": "string",

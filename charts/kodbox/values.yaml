@@ -214,8 +214,11 @@ externalDatabase:
 ## external), gzipped onto a dedicated volume, keeping the newest `keep` files.
 ## The volume lives in the same cluster: copy dumps elsewhere for off-site
 ## backups. The app volume (user files) is not included. See README "Backups".
+## Off by default: on storage classes that bind volumes on first use
+## (WaitForFirstConsumer, the default on EKS/GKE/AKS) the backup volume stays
+## Pending until the first run, which makes `helm install --wait` time out.
 backup:
-  enabled: true
+  enabled: false
   # Cron schedule, in `timezone` when set (else UTC).
   schedule: "0 2 * * *"
   # Number of dumps to keep (one per run).
