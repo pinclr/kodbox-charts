@@ -149,6 +149,8 @@ schema = {
             }),
             "waitForDependencies": b("Wait for the database and redis to accept connections before starting kodbox."),
             "resources": resources("the app"),
+            "extraVolumes": free("Extra volumes on the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf.", "array"),
+            "extraVolumeMounts": free("Extra volume mounts on the app container, pairing with app.extraVolumes.", "array"),
             **sched("the app"),
         }),
         "admin": obj("Initial kodbox admin account, applied only on the very first start.", {
