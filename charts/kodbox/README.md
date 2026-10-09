@@ -298,6 +298,16 @@ without redis, or a PodDisruptionBudget whose `minAvailable` blocks node drains.
 replica the chart adds a PodDisruptionBudget (`app.pdb`, minAvailable 1), and
 replicas prefer different nodes (`app.podAntiAffinity`: `soft`, `hard` or `none`).
 
+### Graceful shutdown
+
+When an app pod stops (scale-down, rollout, node drain) it keeps serving for
+`app.preStopSleepSeconds` (10s) while the Service and gateway stop routing to
+it. Then supervisord stops nginx and php-fpm with SIGQUIT, so running requests
+finish; the image's supervisord allows each about 10s before killing it.
+`app.terminationGracePeriodSeconds` (60s) covers both. Requests that still
+run after that, such as a slow large upload, are cut off. `app.lifecycle`
+replaces the default hook.
+
 ### Autoscaling
 
 `app.autoscaling.enabled=true` adds a HorizontalPodAutoscaler (requires
@@ -534,8 +544,10 @@ passwords and lock kodbox out of its database. With Argo CD, supply the
 credentials instead of generating them:
 
 - `database.existingSecret` and `admin.existingSecret`, pre-created (e.g. with
-  External Secrets or Sealed Secrets), and
-- `milvus.minio.rootPassword` (the RustFS secret key) when Milvus is enabled.
+  External Secrets or Sealed Secrets),
+- `milvus.minio.existingSecret` (keys `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`)
+  when Milvus is enabled, and
+- `kodoffice.jwt.existingSecret` with `kodoffice.edition=onlyoffice`.
 
 Flux runs real Helm installs and upgrades, where `lookup` works.
 
@@ -666,6 +678,9 @@ Kodbox application (nginx + php-fpm, port 80).
 | `app.persistence.existingClaim` | string | `""` | Use an existing PersistentVolumeClaim instead of creating one. |
 | `app.persistence.annotations` | object | `{}` | Extra PVC annotations, e.g. for pvc-autoresizer. |
 | `app.waitForDependencies` | boolean | `true` | Wait for the database and redis to accept connections before starting kodbox. |
+| `app.preStopSleepSeconds` | integer | `10` | Seconds the pod keeps serving after termination starts, while it's removed from routing; 0 disables. |
+| `app.terminationGracePeriodSeconds` | integer | `60` | Time for the preStop sleep plus nginx/php-fpm to stop gracefully. |
+| `app.lifecycle` | object | `{}` | Container lifecycle hooks; replaces the default preStop sleep when set. |
 | `app.resources` | object | `{"requests": {"cpu": "250m", "memory": "512Mi"}, "limits"...` | Kubernetes resource requests and limits for the app. |
 | `app.extraVolumes` | array | `[]` | Extra volumes on the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf. |
 | `app.extraVolumeMounts` | array | `[]` | Extra volume mounts on the app container, pairing with app.extraVolumes. |
@@ -939,6 +954,7 @@ Milvus vector database stack (etcd + RustFS object storage + milvus standalone) 
 | `milvus.minio.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
 | `milvus.minio.rootUser` | string | `"minioadmin"` | RustFS access key (RUSTFS_ACCESS_KEY), also used by Milvus. |
 | `milvus.minio.rootPassword` | string | `""` | RustFS secret key (RUSTFS_SECRET_KEY); empty generates one. At least 8 characters. |
+| `milvus.minio.existingSecret` | string | `""` | Existing secret with MINIO_ROOT_USER and MINIO_ROOT_PASSWORD, used instead of rootUser/rootPassword. |
 | `milvus.minio.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
 | `milvus.minio.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
 | `milvus.minio.persistence.size` | string | `"8Gi"` | Volume size for RustFS data. |

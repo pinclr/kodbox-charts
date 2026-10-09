@@ -53,7 +53,7 @@ spec:
       labels:
         {{- include "kodbox.podLabels" $sel | nindent 8 }}
       annotations:
-        checksum/milvus-secret: {{ pick .Values.milvus.minio "rootUser" "rootPassword" | toYaml | sha256sum }}
+        checksum/milvus-secret: {{ pick .Values.milvus.minio "rootUser" "rootPassword" "existingSecret" | toYaml | sha256sum }}
         {{- with .Values.milvus.minio.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -83,12 +83,12 @@ spec:
             - name: RUSTFS_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
+                  name: {{ include "kodbox.milvusSecretName" . }}
                   key: MINIO_ROOT_USER
             - name: RUSTFS_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
+                  name: {{ include "kodbox.milvusSecretName" . }}
                   key: MINIO_ROOT_PASSWORD
             {{- with (include "kodbox.extraEnv" $sel | trim) }}
             {{- . | nindent 12 }}

@@ -40,7 +40,7 @@ spec:
       labels:
         {{- include "kodbox.podLabels" $sel | nindent 8 }}
       annotations:
-        checksum/milvus-secret: {{ pick .Values.milvus.minio "rootUser" "rootPassword" | toYaml | sha256sum }}
+        checksum/milvus-secret: {{ pick .Values.milvus.minio "rootUser" "rootPassword" "existingSecret" | toYaml | sha256sum }}
         {{- with .Values.milvus.standalone.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -82,6 +82,16 @@ spec:
               value: {{ include "kodbox.componentName" (dict "ctx" . "component" "etcd") }}:2379
             - name: MINIO_ADDRESS
               value: {{ include "kodbox.componentName" (dict "ctx" . "component" "minio") }}:9000
+            - name: MINIO_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kodbox.milvusSecretName" . }}
+                  key: MINIO_ROOT_USER
+            - name: MINIO_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kodbox.milvusSecretName" . }}
+                  key: MINIO_ROOT_PASSWORD
             - name: MQ_TYPE
               value: {{ $v.mqType | quote }}
             {{- with (include "kodbox.extraEnv" $sel | trim) }}
@@ -119,8 +129,8 @@ periodSeconds: 10` "override" $v.readinessProbe) | nindent 10 }}
           {{- end }}
       volumes:
         - name: config
-          secret:
-            secretName: {{ include "kodbox.componentName" $sel }}
+          configMap:
+            name: {{ include "kodbox.componentName" $sel }}
             items:
               - key: user.yaml
                 path: user.yaml

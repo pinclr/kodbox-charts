@@ -43,6 +43,7 @@ spec:
         {{- end }}
     spec:
       {{- include "kodbox.podScheduling" (merge (dict "affinity" $affinity) $sel) | nindent 6 }}
+      terminationGracePeriodSeconds: {{ include "kodbox.appGracePeriod" . }}
       {{- if .Values.app.waitForDependencies }}
       # The image installs kodbox against the database on first start, so make
       # sure the database (and redis) accept connections before it runs.
@@ -118,6 +119,17 @@ spec:
             - secretRef:
                 name: {{ include "kodbox.adminSecretName" . }}
             {{- end }}
+          {{- if .Values.app.lifecycle }}
+          lifecycle:
+            {{- toYaml .Values.app.lifecycle | nindent 12 }}
+          {{- else if ne (include "kodbox.appPreStopSleep" .) "0" }}
+          # Keep serving while the Service and gateway stop routing to the pod;
+          # then supervisord stops nginx and php-fpm gracefully (SIGQUIT).
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "{{ include "kodbox.appPreStopSleep" . }}"]
+          {{- end }}
           ports:
             - name: http
               containerPort: 80
