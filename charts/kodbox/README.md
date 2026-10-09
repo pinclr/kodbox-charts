@@ -740,6 +740,7 @@ Bundled MariaDB. Set enabled=false and fill externalDatabase to use your own.
 | `db.persistence.size` | string | `"4Gi"` | Volume size for MariaDB data. |
 | `db.persistence.existingClaim` | string | `""` | Existing PVC instead of the StatefulSet's volume; new installs only. |
 | `db.resources` | object | `{"requests": {"cpu": "250m", "memory": "512Mi"}, "limits"...` | Kubernetes resource requests and limits for MariaDB. |
+| `db.extraContainers` | array | `[]` | Extra sidecar containers for MariaDB, e.g. mysqld_exporter. |
 | `db.nodeSelector` | object | `{}` | Node labels for scheduling MariaDB. |
 | `db.tolerations` | array | `[]` | Tolerations for MariaDB pods. |
 | `db.affinity` | object | `{}` | Affinity rules for MariaDB pods. |
@@ -821,6 +822,7 @@ Bundled Redis for kodbox sessions and cache.
 | `redis.persistence.size` | string | `"2Gi"` | Volume size for Redis append-only data. |
 | `redis.persistence.existingClaim` | string | `""` | Existing PVC instead of the StatefulSet's volume; new installs only. |
 | `redis.resources` | object | `{"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": ...` | Kubernetes resource requests and limits for Redis. |
+| `redis.extraContainers` | array | `[]` | Extra sidecar containers for Redis, e.g. redis_exporter. |
 | `redis.nodeSelector` | object | `{}` | Node labels for scheduling Redis. |
 | `redis.tolerations` | array | `[]` | Tolerations for Redis pods. |
 | `redis.affinity` | object | `{}` | Affinity rules for Redis pods. |

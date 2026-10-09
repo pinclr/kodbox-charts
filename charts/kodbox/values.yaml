@@ -218,6 +218,16 @@ db:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  # Extra sidecar containers, e.g. mysqld_exporter for Prometheus metrics.
+  extraContainers: []
+  #  - name: mysqld-exporter
+  #    image: prom/mysqld-exporter:v0.15.1
+  #    env:
+  #      - name: DATA_SOURCE_NAME
+  #        value: "user:pass@(localhost:3306)/"
+  #    ports:
+  #      - name: metrics
+  #        containerPort: 9104
   podSecurityContext:
     seccompProfile:
       type: RuntimeDefault
@@ -338,6 +348,13 @@ redis:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  # Extra sidecar containers, e.g. redis_exporter for Prometheus metrics.
+  extraContainers: []
+  #  - name: redis-exporter
+  #    image: oliver006/redis_exporter:v1.62.0
+  #    ports:
+  #      - name: metrics
+  #        containerPort: 9121
   podSecurityContext:
     seccompProfile:
       type: RuntimeDefault

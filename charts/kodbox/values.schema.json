@@ -532,6 +532,10 @@
           "type": "object",
           "description": "Kubernetes resource requests and limits for MariaDB."
         },
+        "extraContainers": {
+          "type": "array",
+          "description": "Extra sidecar containers for MariaDB, e.g. mysqld_exporter."
+        },
         "nodeSelector": {
           "type": "object",
           "description": "Node labels for scheduling MariaDB."
@@ -907,6 +911,10 @@
         "resources": {
           "type": "object",
           "description": "Kubernetes resource requests and limits for Redis."
+        },
+        "extraContainers": {
+          "type": "array",
+          "description": "Extra sidecar containers for Redis, e.g. redis_exporter."
         },
         "nodeSelector": {
           "type": "object",

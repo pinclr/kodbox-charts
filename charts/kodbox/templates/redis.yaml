@@ -78,6 +78,9 @@ timeoutSeconds: 5` "override" .Values.redis.readinessProbe) | nindent 10 }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- with (include "kodbox.extraContainers" (dict "v" .Values.redis) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
       {{- if not .Values.redis.persistence.enabled }}
       volumes:
         - name: data
