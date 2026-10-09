@@ -34,7 +34,9 @@ spec:
         # Checksum the configured values, not the rendered secret: generated
         # passwords are re-randomised on every render at install time.
         checksum/db-secret: {{ toYaml .Values.database | sha256sum }}
-        checksum/healthz: {{ include (print $.Template.BasePath "/app-configmap.yaml") . | sha256sum }}
+        # Only the ConfigMap's data: its labels carry the chart version, which
+        # would restart the app on every chart upgrade.
+        checksum/config: {{ (include (print $.Template.BasePath "/app-configmap.yaml") . | fromYaml).data | toYaml | sha256sum }}
         {{- with .Values.app.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

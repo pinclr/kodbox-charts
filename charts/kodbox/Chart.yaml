@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.6.0
+version: 0.6.1
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -27,12 +27,8 @@ annotations:
     - name: kodbox
       url: https://kodcloud.com
   artifacthub.io/changes: |
-    - kind: added
-      description: kodoffice.edition=onlyoffice runs upstream ONLYOFFICE Document Server 9.4.0.1 instead of kodcloud's kodoffice 7.4 build
-    - kind: added
-      description: kodoffice.jwt with a generated, persisted secret (on by default for onlyoffice); install notes print it
-    - kind: added
-      description: kodoffice.onlyoffice.config and allowPrivateIpAddress reproduce kodoffice's limits for kodbox
+    - kind: fixed
+      description: App pods no longer restart on every chart upgrade (the config checksum covered the chart-version label); they restart only when the healthz or timezone config changes
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
