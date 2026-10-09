@@ -70,6 +70,19 @@ app.kubernetes.io/component: {{ .component }}
 {{- default (printf "%s-milvus" (include "kodbox.fullname" .)) .Values.milvus.minio.existingSecret }}
 {{- end }}
 
+{{/*
+Graceful-shutdown timings, falling back to the chart defaults when the keys are
+missing (e.g. `helm upgrade --reuse-values` from a release before 0.7.2).
+An explicit 0 still disables the preStop sleep.
+*/}}
+{{- define "kodbox.appPreStopSleep" -}}
+{{- int (ternary .Values.app.preStopSleepSeconds 10 (hasKey .Values.app "preStopSleepSeconds")) }}
+{{- end }}
+
+{{- define "kodbox.appGracePeriod" -}}
+{{- int (ternary .Values.app.terminationGracePeriodSeconds 60 (hasKey .Values.app "terminationGracePeriodSeconds")) }}
+{{- end }}
+
 {{- define "kodbox.adminSecretName" -}}
 {{- default (printf "%s-admin" (include "kodbox.fullname" .)) .Values.admin.existingSecret }}
 {{- end }}
@@ -237,7 +250,7 @@ topologySpreadConstraints:
 {{/* Fails the render on value combinations that deploy but can't work. */}}
 {{- define "kodbox.validate" -}}
 {{- $app := .Values.app }}
-{{- if and (not $app.lifecycle) (ge (int $app.preStopSleepSeconds) (int $app.terminationGracePeriodSeconds)) }}
+{{- if and (not $app.lifecycle) (ge (int (include "kodbox.appPreStopSleep" .)) (int (include "kodbox.appGracePeriod" .))) }}
 {{- fail "app.preStopSleepSeconds must be lower than app.terminationGracePeriodSeconds, leaving time for nginx and php-fpm to stop" }}
 {{- end }}
 {{- $as := $app.autoscaling }}
