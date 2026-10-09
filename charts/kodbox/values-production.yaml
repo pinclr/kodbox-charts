@@ -143,6 +143,14 @@ milvus:
     persistence:
       size: 40Gi
 
+# Nightly database dumps to a 20Gi volume, keeping 14 (README "Backups").
+# With a WaitForFirstConsumer storage class and `helm --wait`, give the backup
+# volume an Immediate-binding class or trigger a first run (see README).
+backup:
+  enabled: true
+  persistence:
+    size: 20Gi
+
 networkPolicy:
   enabled: true
 

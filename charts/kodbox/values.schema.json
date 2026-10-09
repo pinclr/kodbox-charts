@@ -19,6 +19,10 @@
       "description": "IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.timezone. Empty keeps UTC.",
       "pattern": "^([A-Za-z_]+(/[A-Za-z0-9_+-]+)*)?$"
     },
+    "namespaceOverride": {
+      "type": "string",
+      "description": "Namespace for all resources; empty uses the release namespace."
+    },
     "nameOverride": {
       "type": "string",
       "description": "Override the chart name used in resource names."
@@ -317,6 +321,18 @@
           },
           "description": "Extra environment variables for the the app container."
         },
+        "livenessProbe": {
+          "type": "object",
+          "description": "Liveness probe override for the app, merged over the chart default; enabled: false removes it."
+        },
+        "readinessProbe": {
+          "type": "object",
+          "description": "Readiness probe override for the app, merged over the chart default; enabled: false removes it."
+        },
+        "startupProbe": {
+          "type": "object",
+          "description": "Startup probe override for the app, merged over the chart default; enabled: false removes it."
+        },
         "podSecurityContext": {
           "type": "object",
           "description": "Pod security context for the app pods."
@@ -482,6 +498,10 @@
               "type": "string",
               "description": "Volume size for MariaDB data.",
               "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+            },
+            "existingClaim": {
+              "type": "string",
+              "description": "Existing PVC instead of the StatefulSet's volume; new installs only."
             }
           },
           "additionalProperties": false
@@ -533,6 +553,18 @@
           },
           "description": "Extra environment variables for the MariaDB container."
         },
+        "livenessProbe": {
+          "type": "object",
+          "description": "Liveness probe override for MariaDB, merged over the chart default; enabled: false removes it."
+        },
+        "readinessProbe": {
+          "type": "object",
+          "description": "Readiness probe override for MariaDB, merged over the chart default; enabled: false removes it."
+        },
+        "startupProbe": {
+          "type": "object",
+          "description": "Startup probe override for MariaDB, merged over the chart default; enabled: false removes it."
+        },
         "podSecurityContext": {
           "type": "object",
           "description": "Pod security context for MariaDB pods."
@@ -557,6 +589,190 @@
           "minimum": 1,
           "maximum": 65535,
           "description": "Database port."
+        }
+      },
+      "additionalProperties": false
+    },
+    "backup": {
+      "type": "object",
+      "description": "Scheduled mariadb-dump of the kodbox database onto a dedicated volume.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create the backup CronJob and volume. Off by default; see README for WaitForFirstConsumer storage."
+        },
+        "schedule": {
+          "type": "string",
+          "description": "Cron schedule, in timezone when set (else UTC).",
+          "minLength": 1
+        },
+        "keep": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of dumps to keep."
+        },
+        "extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra mariadb-dump options, e.g. --skip-ssl for an external server without TLS."
+        },
+        "image": {
+          "type": "object",
+          "description": "Image with mariadb-dump; empty fields fall back to db.image.",
+          "properties": {
+            "registry": {
+              "type": "string",
+              "description": "Image registry."
+            },
+            "repository": {
+              "type": "string",
+              "description": "Image repository."
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Image tag."
+            },
+            "digest": {
+              "type": "string",
+              "description": "Image digest.",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ],
+              "description": "Image pull policy."
+            }
+          },
+          "additionalProperties": false
+        },
+        "persistence": {
+          "type": "object",
+          "description": "Storage for database dumps, mounted at /backup.",
+          "properties": {
+            "storageClass": {
+              "type": "string",
+              "description": "Storage class; empty uses the cluster default."
+            },
+            "accessModes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "ReadWriteOnce",
+                  "ReadOnlyMany",
+                  "ReadWriteMany",
+                  "ReadWriteOncePod"
+                ]
+              },
+              "description": "PersistentVolumeClaim access modes."
+            },
+            "size": {
+              "type": "string",
+              "description": "Volume size for database dumps.",
+              "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+            },
+            "existingClaim": {
+              "type": "string",
+              "description": "Use an existing PersistentVolumeClaim instead of creating one."
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Extra PVC annotations."
+            }
+          },
+          "additionalProperties": false
+        },
+        "successfulJobsHistoryLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Finished successful Jobs to keep."
+        },
+        "failedJobsHistoryLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Failed Jobs to keep."
+        },
+        "startingDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How late a run may start."
+        },
+        "resources": {
+          "type": "object",
+          "description": "Kubernetes resource requests and limits for backups."
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Node labels for scheduling backup."
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Tolerations for backup pods."
+        },
+        "affinity": {
+          "type": "object",
+          "description": "Affinity rules for backup pods."
+        },
+        "podAnnotations": {
+          "type": "object",
+          "description": "Extra annotations for backup pods."
+        },
+        "podLabels": {
+          "type": "object",
+          "description": "Extra labels for backup pods."
+        },
+        "priorityClassName": {
+          "type": "string",
+          "description": "PriorityClass for backup pods."
+        },
+        "topologySpreadConstraints": {
+          "type": "array",
+          "description": "Topology spread constraints for backup pods; a missing labelSelector is filled with the pod's labels."
+        },
+        "extraEnv": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "description": "Extra environment variables for the backup container."
+        },
+        "livenessProbe": {
+          "type": "object",
+          "description": "Liveness probe override for backup, merged over the chart default; enabled: false removes it."
+        },
+        "readinessProbe": {
+          "type": "object",
+          "description": "Readiness probe override for backup, merged over the chart default; enabled: false removes it."
+        },
+        "startupProbe": {
+          "type": "object",
+          "description": "Startup probe override for backup, merged over the chart default; enabled: false removes it."
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod security context for backup pods."
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Container security context for backup containers."
         }
       },
       "additionalProperties": false
@@ -658,6 +874,10 @@
               "type": "string",
               "description": "Volume size for Redis append-only data.",
               "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+            },
+            "existingClaim": {
+              "type": "string",
+              "description": "Existing PVC instead of the StatefulSet's volume; new installs only."
             }
           },
           "additionalProperties": false
@@ -708,6 +928,18 @@
             ]
           },
           "description": "Extra environment variables for the Redis container."
+        },
+        "livenessProbe": {
+          "type": "object",
+          "description": "Liveness probe override for Redis, merged over the chart default; enabled: false removes it."
+        },
+        "readinessProbe": {
+          "type": "object",
+          "description": "Readiness probe override for Redis, merged over the chart default; enabled: false removes it."
+        },
+        "startupProbe": {
+          "type": "object",
+          "description": "Startup probe override for Redis, merged over the chart default; enabled: false removes it."
         },
         "podSecurityContext": {
           "type": "object",
@@ -954,6 +1186,18 @@
           },
           "description": "Extra environment variables for the KodOffice container."
         },
+        "livenessProbe": {
+          "type": "object",
+          "description": "Liveness probe override for KodOffice, merged over the chart default; enabled: false removes it."
+        },
+        "readinessProbe": {
+          "type": "object",
+          "description": "Readiness probe override for KodOffice, merged over the chart default; enabled: false removes it."
+        },
+        "startupProbe": {
+          "type": "object",
+          "description": "Startup probe override for KodOffice, merged over the chart default; enabled: false removes it."
+        },
         "podSecurityContext": {
           "type": "object",
           "description": "Pod security context for KodOffice pods."
@@ -1084,6 +1328,18 @@
             ]
           },
           "description": "Extra environment variables for the Imaginary container."
+        },
+        "livenessProbe": {
+          "type": "object",
+          "description": "Liveness probe override for Imaginary, merged over the chart default; enabled: false removes it."
+        },
+        "readinessProbe": {
+          "type": "object",
+          "description": "Readiness probe override for Imaginary, merged over the chart default; enabled: false removes it."
+        },
+        "startupProbe": {
+          "type": "object",
+          "description": "Startup probe override for Imaginary, merged over the chart default; enabled: false removes it."
         },
         "podSecurityContext": {
           "type": "object",
@@ -1235,6 +1491,18 @@
               },
               "description": "Extra environment variables for the etcd container."
             },
+            "livenessProbe": {
+              "type": "object",
+              "description": "Liveness probe override for etcd, merged over the chart default; enabled: false removes it."
+            },
+            "readinessProbe": {
+              "type": "object",
+              "description": "Readiness probe override for etcd, merged over the chart default; enabled: false removes it."
+            },
+            "startupProbe": {
+              "type": "object",
+              "description": "Startup probe override for etcd, merged over the chart default; enabled: false removes it."
+            },
             "podSecurityContext": {
               "type": "object",
               "description": "Pod security context for etcd pods."
@@ -1382,6 +1650,18 @@
                 ]
               },
               "description": "Extra environment variables for the RustFS container."
+            },
+            "livenessProbe": {
+              "type": "object",
+              "description": "Liveness probe override for RustFS, merged over the chart default; enabled: false removes it."
+            },
+            "readinessProbe": {
+              "type": "object",
+              "description": "Readiness probe override for RustFS, merged over the chart default; enabled: false removes it."
+            },
+            "startupProbe": {
+              "type": "object",
+              "description": "Startup probe override for RustFS, merged over the chart default; enabled: false removes it."
             },
             "podSecurityContext": {
               "type": "object",
@@ -1551,6 +1831,18 @@
                 ]
               },
               "description": "Extra environment variables for the Milvus container."
+            },
+            "livenessProbe": {
+              "type": "object",
+              "description": "Liveness probe override for Milvus, merged over the chart default; enabled: false removes it."
+            },
+            "readinessProbe": {
+              "type": "object",
+              "description": "Readiness probe override for Milvus, merged over the chart default; enabled: false removes it."
+            },
+            "startupProbe": {
+              "type": "object",
+              "description": "Startup probe override for Milvus, merged over the chart default; enabled: false removes it."
             },
             "podSecurityContext": {
               "type": "object",

@@ -1,8 +1,9 @@
 name: Release charts
 
 # Publishes every chart whose Chart.yaml version has no release yet:
-# a GitHub Release (tag <chart>-<version>) with the packaged .tgz, plus an
-# updated index.yaml on gh-pages, served at https://pinclr.github.io/kodbox-charts
+# a GitHub Release (tag <chart>-<version>) with the GPG-signed .tgz, an updated
+# index.yaml on gh-pages (https://pinclr.github.io/kodbox-charts), and an OCI
+# artifact on GHCR (oci://ghcr.io/pinclr/charts/<chart>) signed with cosign.
 on:
   push:
     branches: [main]
@@ -13,6 +14,8 @@ on:
 
 permissions:
   contents: write
+  packages: write   # push charts to GHCR
+  id-token: write   # keyless cosign signing (GitHub OIDC)
 
 concurrency:
   group: release-charts
@@ -45,6 +48,7 @@ jobs:
           printf '%s' "$GPG_PASSPHRASE" > "$RUNNER_TEMP/passphrase"
 
       - name: Run chart-releaser
+        id: cr
         uses: helm/chart-releaser-action@v1.7.0
         with:
           charts_dir: charts
@@ -56,6 +60,33 @@ jobs:
           CR_KEY: pinclr Helm charts
           CR_KEYRING: ${{ runner.temp }}/secring.gpg
           CR_PASSPHRASE_FILE: ${{ runner.temp }}/passphrase
+
+      - uses: sigstore/cosign-installer@v4.1.2
+        if: steps.cr.outputs.changed_charts != ''
+
+      # Same packages as OCI artifacts on GHCR, signed keylessly: the signature
+      # names this workflow on main, recorded in Sigstore's transparency log.
+      # Versions already on GHCR are skipped, so OCI tags never change.
+      - name: Push charts to GHCR and sign with cosign
+        if: steps.cr.outputs.changed_charts != ''
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          registry=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts
+          echo "$REGISTRY_TOKEN" | helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for pkg in .cr-release-packages/*.tgz; do
+            name=$(helm show chart "$pkg" | sed -n 's/^name: //p')
+            version=$(helm show chart "$pkg" | sed -n 's/^version: //p')
+            if helm show chart "oci://$registry/$name" --version "$version" >/dev/null 2>&1; then
+              echo "$name $version already on GHCR, skipping"
+              continue
+            fi
+            out=$(helm push "$pkg" "oci://$registry" 2>&1)
+            echo "$out"
+            digest=$(echo "$out" | sed -n 's/^Digest: //p')
+            cosign sign --yes "$registry/$name@$digest"
+          done
 
       # Artifact Hub reads artifacthub-repo.yml from the root of the Helm repo,
       # i.e. next to index.yaml on gh-pages.

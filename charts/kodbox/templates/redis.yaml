@@ -4,6 +4,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis
@@ -19,6 +20,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis
@@ -60,16 +62,15 @@ spec:
           ports:
             - name: redis
               containerPort: 6379
-          livenessProbe:
-            exec:
-              command: ["redis-cli", "ping"]
-            periodSeconds: 20
-            timeoutSeconds: 5
-          readinessProbe:
-            exec:
-              command: ["redis-cli", "ping"]
-            periodSeconds: 10
-            timeoutSeconds: 5
+          {{- include "kodbox.probe" (dict "name" "startupProbe" "default" `` "override" .Values.redis.startupProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "livenessProbe" "default" `exec:
+  command: ["redis-cli", "ping"]
+periodSeconds: 20
+timeoutSeconds: 5` "override" .Values.redis.livenessProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "readinessProbe" "default" `exec:
+  command: ["redis-cli", "ping"]
+periodSeconds: 10
+timeoutSeconds: 5` "override" .Values.redis.readinessProbe) | nindent 10 }}
           volumeMounts:
             - name: data
               mountPath: /data
@@ -81,8 +82,13 @@ spec:
       volumes:
         - name: data
           emptyDir: {}
+      {{- else if .Values.redis.persistence.existingClaim }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.redis.persistence.existingClaim }}
       {{- end }}
-  {{- if .Values.redis.persistence.enabled }}
+  {{- if and .Values.redis.persistence.enabled (not .Values.redis.persistence.existingClaim) }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain

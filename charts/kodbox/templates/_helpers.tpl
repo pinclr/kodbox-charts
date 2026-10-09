@@ -15,6 +15,11 @@
 {{- end }}
 {{- end }}
 
+{{/* Namespace for every resource: namespaceOverride, else the release namespace. */}}
+{{- define "kodbox.namespace" -}}
+{{- default .Release.Namespace .Values.namespaceOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
 {{- define "kodbox.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
@@ -121,6 +126,52 @@ Environment list items added to every component's main container: TZ from
 {{- end }}
 {{- with .v.extraEnv }}
 {{ toYaml . }}
+{{- end }}
+{{- end }}
+
+{{/* Backup image: backup.image fields, falling back to db.image. */}}
+{{- define "kodbox.backupImage" -}}
+{{- $b := .Values.backup.image }}
+{{- $d := .Values.db.image }}
+{{- $img := dict "registry" (default $d.registry $b.registry) "repository" (default $d.repository $b.repository) "tag" (default $d.tag $b.tag) "digest" (default $d.digest $b.digest) }}
+{{- include "kodbox.image" (dict "ctx" . "image" $img) }}
+{{- end }}
+
+{{/*
+Container env and script for mariadb-dump, shared by the backup CronJob and its
+helm test. DB credentials come from the database secret; MYSQL_PWD keeps the
+password off the command line.
+*/}}
+{{- define "kodbox.backupEnv" -}}
+- name: DB_HOST
+  value: {{ include "kodbox.dbHost" . | quote }}
+- name: DB_PORT
+  value: {{ include "kodbox.dbPort" . | quote }}
+- name: MYSQL_PWD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "kodbox.dbSecretName" . }}
+      key: MYSQL_PASSWORD
+- name: KEEP
+  value: {{ .Values.backup.keep | quote }}
+{{- end }}
+
+{{- define "kodbox.backupDumpCommand" -}}
+mariadb-dump --host="$DB_HOST" --port="$DB_PORT" --user="$MYSQL_USER" --single-transaction --quick --routines --triggers {{- range .Values.backup.extraArgs }} {{ . | squote }}{{ end }} --databases "$MYSQL_DATABASE"
+{{- end }}
+
+{{/*
+A container probe: the chart's default (YAML string, may be empty) with the
+component's override merged over it, e.g. {periodSeconds: 30}. enabled: false
+drops it; an override for a probe without a default needs its own handler.
+Call with (dict "name" "livenessProbe" "default" `...` "override" .Values.x.livenessProbe).
+*/}}
+{{- define "kodbox.probe" -}}
+{{- $override := .override | default dict }}
+{{- $probe := mergeOverwrite (fromYaml .default | default dict) (omit $override "enabled") }}
+{{- if and $probe (ne (toString (dig "enabled" true $override)) "false") }}
+{{ .name }}:
+  {{- toYaml $probe | nindent 2 }}
 {{- end }}
 {{- end }}
 

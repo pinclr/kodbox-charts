@@ -1,7 +1,7 @@
 {{- if .Values.networkPolicy.enabled }}
 {{- $rules := list }}
 {{- if .Values.db.enabled }}
-{{- $rules = append $rules (dict "target" "db" "from" (list "app") "ports" (list 3306)) }}
+{{- $rules = append $rules (dict "target" "db" "from" (ternary (list "app" "backup") (list "app") .Values.backup.enabled) "ports" (list 3306)) }}
 {{- end }}
 {{- if .Values.redis.enabled }}
 {{- $rules = append $rules (dict "target" "redis" "from" (list "app") "ports" (list 6379)) }}
@@ -20,6 +20,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ include "kodbox.componentName" (dict "ctx" $ "component" .target) }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ .target }}

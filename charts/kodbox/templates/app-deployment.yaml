@@ -14,6 +14,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: app
@@ -123,25 +124,22 @@ spec:
           # healthz.php exercises nginx + php-fpm without touching the database.
           # First start copies the kodbox source and runs the installer before
           # nginx starts, so allow up to 10 minutes.
-          startupProbe:
-            httpGet:
-              path: /healthz.php
-              port: http
-            periodSeconds: 10
-            failureThreshold: 60
-          livenessProbe:
-            httpGet:
-              path: /healthz.php
-              port: http
-            periodSeconds: 20
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /healthz.php
-              port: http
-            periodSeconds: 10
-            timeoutSeconds: 5
+          {{- include "kodbox.probe" (dict "name" "startupProbe" "default" `httpGet:
+  path: /healthz.php
+  port: http
+periodSeconds: 10
+failureThreshold: 60` "override" .Values.app.startupProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "livenessProbe" "default" `httpGet:
+  path: /healthz.php
+  port: http
+periodSeconds: 20
+timeoutSeconds: 5
+failureThreshold: 3` "override" .Values.app.livenessProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "readinessProbe" "default" `httpGet:
+  path: /healthz.php
+  port: http
+periodSeconds: 10
+timeoutSeconds: 5` "override" .Values.app.readinessProbe) | nindent 10 }}
           volumeMounts:
             - name: site
               mountPath: /var/www/html

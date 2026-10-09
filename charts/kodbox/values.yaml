@@ -12,6 +12,10 @@ global:
 # container and PHP's date.timezone for kodbox. Empty keeps the images' UTC.
 timezone: ""
 
+# Namespace for all resources; empty uses the release namespace (helm -n).
+# Mainly for umbrella charts that install this chart into another namespace.
+namespaceOverride: ""
+
 nameOverride: ""
 fullnameOverride: ""
 
@@ -122,6 +126,11 @@ app:
     seccompProfile:
       type: RuntimeDefault
   securityContext: {}
+  # Probe overrides merged over the chart defaults, e.g. {periodSeconds: 30};
+  # enabled: false removes a probe. See README "Pod options".
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
 
 
 ## Initial kodbox admin account, applied only on the very first start (when the
@@ -169,6 +178,9 @@ db:
     accessModes:
       - ReadWriteOnce
     size: 4Gi
+    # Existing PVC (e.g. restored data) instead of the StatefulSet's own volume.
+    # Only for new installs: Kubernetes can't switch an existing StatefulSet.
+    existingClaim: ""
   resources:
     requests:
       cpu: 250m
@@ -188,10 +200,77 @@ db:
     seccompProfile:
       type: RuntimeDefault
   securityContext: {}
+  # Probe overrides merged over the chart defaults, e.g. {periodSeconds: 30};
+  # enabled: false removes a probe. See README "Pod options".
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
 
 externalDatabase:
   host: ""
   port: 3306
+
+## Scheduled database backups: mariadb-dump of the kodbox database (bundled or
+## external), gzipped onto a dedicated volume, keeping the newest `keep` files.
+## The volume lives in the same cluster: copy dumps elsewhere for off-site
+## backups. The app volume (user files) is not included. See README "Backups".
+## Off by default: on storage classes that bind volumes on first use
+## (WaitForFirstConsumer, the default on EKS/GKE/AKS) the backup volume stays
+## Pending until the first run, which makes `helm install --wait` time out.
+backup:
+  enabled: false
+  # Cron schedule, in `timezone` when set (else UTC).
+  schedule: "0 2 * * *"
+  # Number of dumps to keep (one per run).
+  keep: 14
+  # Extra mariadb-dump options.
+  extraArgs: []
+  # Image with mariadb-dump; empty fields fall back to db.image.
+  image:
+    registry: ""
+    repository: ""
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  persistence:
+    # Empty storageClass uses the cluster default.
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    existingClaim: ""
+    annotations: {}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # Seconds a run may be late (e.g. cluster down at the scheduled time) and still start.
+  startingDeadlineSeconds: 3600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+  priorityClassName: ""
+  topologySpreadConstraints: []
+  extraEnv: []
+  # Runs as the image's mysql user (999), meeting the "restricted" Pod Security Standard.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
 
 ## Bundled Redis (kodbox sessions and cache)
 redis:
@@ -219,6 +298,9 @@ redis:
     accessModes:
       - ReadWriteOnce
     size: 2Gi
+    # Existing PVC (e.g. restored data) instead of the StatefulSet's own volume.
+    # Only for new installs: Kubernetes can't switch an existing StatefulSet.
+    existingClaim: ""
   resources:
     requests:
       cpu: 50m
@@ -240,6 +322,11 @@ redis:
     # The redis user (uid 999, gid 1000) must be able to write the volume.
     fsGroup: 1000
   securityContext: {}
+  # Probe overrides merged over the chart defaults, e.g. {periodSeconds: 30};
+  # enabled: false removes a probe. See README "Pod options".
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
 
 ## External Redis, used when redis.enabled=false. Empty host disables Redis
 ## (file sessions: single replica only). Like the database, kodbox writes these
@@ -333,6 +420,11 @@ kodoffice:
     seccompProfile:
       type: RuntimeDefault
   securityContext: {}
+  # Probe overrides merged over the chart defaults, e.g. {periodSeconds: 30};
+  # enabled: false removes a probe. See README "Pod options".
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
 
 ## Imaginary thumbnail/image processing service (called server-side by kodbox)
 imaginary:
@@ -381,6 +473,11 @@ imaginary:
     allowPrivilegeEscalation: false
     capabilities:
       drop: ["ALL"]
+  # Probe overrides merged over the chart defaults, e.g. {periodSeconds: 30};
+  # enabled: false removes a probe. See README "Pod options".
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
 
 ## Milvus vector database stack (etcd + RustFS object storage + milvus standalone), mirroring
 ## the milvus docker-compose shipped with the install. Only needed for kodbox's
@@ -426,6 +523,11 @@ milvus:
       seccompProfile:
         type: RuntimeDefault
     securityContext: {}
+    # Probe overrides merged over the chart defaults, e.g. {periodSeconds: 30};
+    # enabled: false removes a probe. See README "Pod options".
+    livenessProbe: {}
+    readinessProbe: {}
+    startupProbe: {}
 
   # S3 object storage for Milvus. Runs RustFS (https://github.com/rustfs/rustfs),
   # an S3/MinIO-compatible server: MinIO's community edition is archived and its
@@ -473,6 +575,11 @@ milvus:
       allowPrivilegeEscalation: false
       capabilities:
         drop: ["ALL"]
+    # Probe overrides merged over the chart defaults, e.g. {periodSeconds: 30};
+    # enabled: false removes a probe. See README "Pod options".
+    livenessProbe: {}
+    readinessProbe: {}
+    startupProbe: {}
 
   standalone:
     image:
@@ -511,6 +618,11 @@ milvus:
       seccompProfile:
         type: RuntimeDefault
     securityContext: {}
+    # Probe overrides merged over the chart defaults, e.g. {periodSeconds: 30};
+    # enabled: false removes a probe. See README "Pod options".
+    livenessProbe: {}
+    readinessProbe: {}
+    startupProbe: {}
 
 ## NetworkPolicies restricting who can reach the backing services:
 ## db/redis/imaginary from the app, etcd/RustFS (minio) from milvus, milvus from the app.
