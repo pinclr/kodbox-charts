@@ -131,6 +131,15 @@ app:
   # Wait for the database and redis to accept connections before starting.
   waitForDependencies: true
 
+  # Graceful shutdown. On termination the pod keeps serving for
+  # preStopSleepSeconds while the Service and gateway stop routing to it, then
+  # supervisord stops nginx and php-fpm with SIGQUIT, letting running requests
+  # finish (the image's supervisord allows each 10s before killing it).
+  preStopSleepSeconds: 10
+  terminationGracePeriodSeconds: 60
+  # Replaces the default preStop sleep entirely when set.
+  lifecycle: {}
+
   # Pod and container security contexts. Every component defaults to the
   # RuntimeDefault seccomp profile (Pod Security "baseline" compatible). The
   # kodcloud images start as root and drop privileges themselves, so check an
@@ -556,6 +565,9 @@ milvus:
     rootUser: minioadmin
     # Left empty, a random secret key is generated on install and kept across upgrades.
     rootPassword: ""
+    # Pre-created secret with keys MINIO_ROOT_USER and MINIO_ROOT_PASSWORD,
+    # used instead of rootUser/rootPassword (e.g. for GitOps).
+    existingSecret: ""
     persistence:
       storageClass: ""
       accessModes:

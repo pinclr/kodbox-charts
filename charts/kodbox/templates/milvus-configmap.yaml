@@ -1,0 +1,21 @@
+{{- if .Values.milvus.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "milvus") }}
+  namespace: {{ include "kodbox.namespace" $ }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: milvus
+data:
+  # Milvus overlays configs/user.yaml on top of its bundled milvus.yaml. The
+  # object storage credentials come from MINIO_ACCESS_KEY_ID /
+  # MINIO_SECRET_ACCESS_KEY (env, from the milvus secret), not this file.
+  user.yaml: |
+    etcd:
+      endpoints:
+        - {{ include "kodbox.componentName" (dict "ctx" . "component" "etcd") }}:2379
+    minio:
+      address: {{ include "kodbox.componentName" (dict "ctx" . "component" "minio") }}
+      port: 9000
+{{- end }}

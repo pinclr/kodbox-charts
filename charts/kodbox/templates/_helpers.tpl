@@ -65,6 +65,11 @@ app.kubernetes.io/component: {{ .component }}
 {{- default (printf "%s-kodoffice" (include "kodbox.fullname" .)) .Values.kodoffice.jwt.existingSecret }}
 {{- end }}
 
+{{/* Secret with the RustFS (minio component) credentials, used by RustFS and Milvus. */}}
+{{- define "kodbox.milvusSecretName" -}}
+{{- default (printf "%s-milvus" (include "kodbox.fullname" .)) .Values.milvus.minio.existingSecret }}
+{{- end }}
+
 {{- define "kodbox.adminSecretName" -}}
 {{- default (printf "%s-admin" (include "kodbox.fullname" .)) .Values.admin.existingSecret }}
 {{- end }}
@@ -232,6 +237,9 @@ topologySpreadConstraints:
 {{/* Fails the render on value combinations that deploy but can't work. */}}
 {{- define "kodbox.validate" -}}
 {{- $app := .Values.app }}
+{{- if and (not $app.lifecycle) (ge (int $app.preStopSleepSeconds) (int $app.terminationGracePeriodSeconds)) }}
+{{- fail "app.preStopSleepSeconds must be lower than app.terminationGracePeriodSeconds, leaving time for nginx and php-fpm to stop" }}
+{{- end }}
 {{- $as := $app.autoscaling }}
 {{- if and $as.enabled (lt (int $as.maxReplicas) (int $as.minReplicas)) }}
 {{- fail "app.autoscaling.maxReplicas must be at least minReplicas" }}

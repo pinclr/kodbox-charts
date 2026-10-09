@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.7.1
+version: 0.7.2
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -27,7 +27,14 @@ annotations:
     - name: kodbox
       url: https://kodcloud.com
   artifacthub.io/changes: |
-      description: app.extraVolumes and app.extraVolumeMounts add extra volumes/mounts to the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf to enable their status pages for monitoring
+    - kind: added
+      description: Graceful app shutdown, a 10s preStop sleep and a 60s termination grace period (app.preStopSleepSeconds, app.terminationGracePeriodSeconds, app.lifecycle)
+    - kind: added
+      description: milvus.minio.existingSecret for the RustFS/Milvus object storage credentials
+    - kind: changed
+      description: Milvus reads the object storage credentials from its environment; its user.yaml moved to a ConfigMap without credentials
+    - kind: fixed
+      description: 0.7.1's changelog entry was malformed; CI now validates artifacthub.io/changes
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
