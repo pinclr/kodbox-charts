@@ -8,7 +8,7 @@ community images are gone. RustFS can't use MinIO's data, so an upgrade with
 the old MinIO StatefulSet still in place is refused; see README "Upgrades".
 */}}
 {{- $name := include "kodbox.componentName" $sel }}
-{{- $old := lookup "apps/v1" "StatefulSet" .Release.Namespace $name }}
+{{- $old := lookup "apps/v1" "StatefulSet" (include "kodbox.namespace" .) $name }}
 {{- if $old }}
 {{- $oldImage := (first $old.spec.template.spec.containers).image }}
 {{- if contains "minio" (regexReplaceAll ".*/" $oldImage "") }}
@@ -19,6 +19,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: minio
@@ -37,6 +38,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: minio
@@ -51,7 +53,7 @@ spec:
       labels:
         {{- include "kodbox.podLabels" $sel | nindent 8 }}
       annotations:
-        checksum/milvus-secret: {{ toYaml .Values.milvus.minio | sha256sum }}
+        checksum/milvus-secret: {{ pick .Values.milvus.minio "rootUser" "rootPassword" | toYaml | sha256sum }}
         {{- with .Values.milvus.minio.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -96,17 +98,16 @@ spec:
               containerPort: 9000
             - name: console
               containerPort: 9001
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: api
-            periodSeconds: 30
-            timeoutSeconds: 20
-          readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: api
-            periodSeconds: 10
+          {{- include "kodbox.probe" (dict "name" "startupProbe" "default" `` "override" $v.startupProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "livenessProbe" "default" `httpGet:
+  path: /health
+  port: api
+periodSeconds: 30
+timeoutSeconds: 20` "override" $v.livenessProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "readinessProbe" "default" `httpGet:
+  path: /health/ready
+  port: api
+periodSeconds: 10` "override" $v.readinessProbe) | nindent 10 }}
           volumeMounts:
             - name: data
               mountPath: /data

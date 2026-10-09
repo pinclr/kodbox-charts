@@ -6,7 +6,7 @@ Open: https://{{ first .Values.gateway.app.hostnames }}
 Open: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.app.host }}
 {{- else }}
 Access locally:
-  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kodbox.componentName" (dict "ctx" . "component" "app") }} 8088:{{ .Values.app.service.port }}
+  kubectl -n {{ include "kodbox.namespace" . }} port-forward svc/{{ include "kodbox.componentName" (dict "ctx" . "component" "app") }} 8088:{{ .Values.app.service.port }}
   then open http://127.0.0.1:8088
 {{- end }}
 
@@ -15,8 +15,8 @@ redis.
 {{- if .Values.admin.bootstrap }}
 The admin account is created on that first start (existing installs are not
 changed):
-  user:     kubectl -n {{ .Release.Namespace }} get secret {{ include "kodbox.adminSecretName" . }} -o jsonpath='{.data.KODBOX_ADMIN_USER}' | base64 -d
-  password: kubectl -n {{ .Release.Namespace }} get secret {{ include "kodbox.adminSecretName" . }} -o jsonpath='{.data.KODBOX_ADMIN_PASSWORD}' | base64 -d
+  user:     kubectl -n {{ include "kodbox.namespace" . }} get secret {{ include "kodbox.adminSecretName" . }} -o jsonpath='{.data.KODBOX_ADMIN_USER}' | base64 -d
+  password: kubectl -n {{ include "kodbox.namespace" . }} get secret {{ include "kodbox.adminSecretName" . }} -o jsonpath='{.data.KODBOX_ADMIN_PASSWORD}' | base64 -d
 {{- else }}
 The admin account is NOT set yet: the first person to open the site
 creates it, so open it and set the admin password right away.
@@ -26,7 +26,7 @@ Database (for reference / backups):
   host:     {{ include "kodbox.dbHost" . }}:{{ include "kodbox.dbPort" . }}
   database: {{ .Values.database.name }}
   user:     {{ .Values.database.user }}
-  password: kubectl -n {{ .Release.Namespace }} get secret {{ include "kodbox.dbSecretName" . }} -o jsonpath='{.data.MYSQL_PASSWORD}' | base64 -d
+  password: kubectl -n {{ include "kodbox.namespace" . }} get secret {{ include "kodbox.dbSecretName" . }} -o jsonpath='{.data.MYSQL_PASSWORD}' | base64 -d
 
 In-cluster endpoints to configure in the kodbox admin panel / plugins:
 {{- if .Values.kodoffice.enabled }}
@@ -34,7 +34,7 @@ In-cluster endpoints to configure in the kodbox admin panel / plugins:
 {{- end }}
 {{- if and .Values.kodoffice.enabled (include "kodbox.kodofficeJwt" .) }}
   {{ .Values.kodoffice.edition }} JWT secret (enter it in kodbox's {{ .Values.kodoffice.edition }} plugin settings):
-    kubectl -n {{ .Release.Namespace }} get secret {{ include "kodbox.kodofficeJwtSecretName" . }} -o jsonpath='{.data.{{ ternary .Values.kodoffice.jwt.existingSecretKey "JWT_SECRET" (ne .Values.kodoffice.jwt.existingSecret "") }}}' | base64 -d
+    kubectl -n {{ include "kodbox.namespace" . }} get secret {{ include "kodbox.kodofficeJwtSecretName" . }} -o jsonpath='{.data.{{ ternary .Values.kodoffice.jwt.existingSecretKey "JWT_SECRET" (ne .Values.kodoffice.jwt.existingSecret "") }}}' | base64 -d
 {{- end }}
 {{- if .Values.imaginary.enabled }}
   imaginary: http://{{ include "kodbox.componentName" (dict "ctx" . "component" "imaginary") }}:{{ .Values.imaginary.service.port }}

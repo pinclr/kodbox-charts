@@ -12,6 +12,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: {{ $fullname }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
   {{- with $gw.gatewayAnnotations }}
@@ -50,6 +51,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ $svc }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ .component }}
@@ -87,6 +89,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ $svc }}-redirect
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ .component }}

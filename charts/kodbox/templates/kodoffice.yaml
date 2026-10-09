@@ -7,6 +7,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: kodoffice
@@ -23,6 +24,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: kodoffice
@@ -72,27 +74,24 @@ spec:
             - name: http
               containerPort: 80
           # First start generates fonts and initialises the internal database.
-          startupProbe:
-            httpGet:
-              path: /healthcheck
-              port: http
-            periodSeconds: 10
-            failureThreshold: 60
-          # The document server briefly returns 502 while its internal services
-          # restart, so tolerate a few failures before restarting the pod.
-          livenessProbe:
-            httpGet:
-              path: /healthcheck
-              port: http
-            periodSeconds: 20
-            timeoutSeconds: 5
-            failureThreshold: 6
-          readinessProbe:
-            httpGet:
-              path: /healthcheck
-              port: http
-            periodSeconds: 10
-            timeoutSeconds: 5
+          # The server briefly returns 502 while its internal services restart,
+          # so liveness tolerates a few failures before restarting the pod.
+          {{- include "kodbox.probe" (dict "name" "startupProbe" "default" `httpGet:
+  path: /healthcheck
+  port: http
+periodSeconds: 10
+failureThreshold: 60` "override" .Values.kodoffice.startupProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "livenessProbe" "default" `httpGet:
+  path: /healthcheck
+  port: http
+periodSeconds: 20
+timeoutSeconds: 5
+failureThreshold: 6` "override" .Values.kodoffice.livenessProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "readinessProbe" "default" `httpGet:
+  path: /healthcheck
+  port: http
+periodSeconds: 10
+timeoutSeconds: 5` "override" .Values.kodoffice.readinessProbe) | nindent 10 }}
           {{- if $onlyoffice }}
           volumeMounts:
             - name: config

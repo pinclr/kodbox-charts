@@ -29,6 +29,25 @@ helm repo update
 helm install kodbox kodbox/kodbox -n kodbox --create-namespace
 ```
 
+Or from the OCI registry (chart 0.7.0 and later):
+
+```bash
+helm install kodbox oci://ghcr.io/pinclr/charts/kodbox --version 0.7.0 -n kodbox --create-namespace
+```
+
+**Verify a release:** packages from the Helm repo carry a GPG provenance file,
+OCI artifacts a cosign signature from this repository's release workflow:
+
+```bash
+curl -s https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc | gpg --import
+gpg --export > ~/.gnupg/pubring.gpg   # Helm reads the legacy keyring format
+helm pull kodbox/kodbox --version 0.7.0 --verify
+
+cosign verify ghcr.io/pinclr/charts/kodbox:0.7.0 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/pinclr/kodbox-charts/\.github/workflows/release\.yaml@refs/heads/main$'
+```
+
 For production, start from the example values:
 
 ```bash
@@ -163,6 +182,14 @@ Every component (`app`, `db`, `redis`, `kodoffice`, `imaginary`,
 | `nodeSelector` / `tolerations` / `affinity` | Scheduling |
 | `topologySpreadConstraints` | Spread pods; a constraint without a `labelSelector` gets the component's pod labels |
 | `priorityClassName` | Pod priority |
+| `livenessProbe` / `readinessProbe` / `startupProbe` | Merged over the chart's probe, e.g. `{periodSeconds: 30, failureThreshold: 10}`; `enabled: false` removes it. A probe the chart doesn't define (e.g. etcd's `startupProbe`) needs its own handler |
+| `podSecurityContext` / `securityContext` | Pod and container security contexts |
+
+`backup` takes the same settings except the probes.
+
+All resources are created in the release namespace (`helm -n`), written into
+each manifest; `namespaceOverride` puts them in another namespace (for umbrella
+charts).
 
 On first start the app waits in an init container until the database (and
 redis) accept connections; the image's entrypoint also waits and retries its
@@ -193,7 +220,8 @@ One replica of everything, Milvus off. Fits on a single node with
 | redis | 50m | 500m | 64Mi | 512Mi | 2Gi RWO |
 | kodoffice | 500m | 2 | 1Gi | 4Gi | – |
 | imaginary | 100m | 1 | 128Mi | 1Gi | – |
-| **Total** | **1.15** | **7.5** | **~2.2Gi** | **9.5Gi** | **14Gi** |
+| backup (nightly job) | 50m | 1 | 128Mi | 512Mi | 20Gi RWO |
+| **Total** | **1.15** | **7.5** | **~2.2Gi** | **9.5Gi** | **34Gi** |
 
 Enabling Milvus (`milvus.enabled=true`) with the default sizes adds:
 
@@ -217,10 +245,11 @@ on. Totals are at the minimum of 2 app replicas; each extra replica adds
 | redis | 1 | 50m | 1 | 64Mi | 2Gi | 10Gi RWO |
 | kodoffice | 1 | 500m | 8 | 1Gi | 16Gi | – |
 | imaginary | 1 | 500m | 4 | 512Mi | 8Gi | – |
+| backup (nightly job) | – | 50m | 1 | 128Mi | 512Mi | 20Gi RWO |
 | etcd | 1 | 100m | 1 | 256Mi | 2Gi | 10Gi RWO |
 | minio (RustFS) | 1 | 100m | 1 | 256Mi | 2Gi | 80Gi RWO |
 | milvus standalone | 1 | 500m | 4 | 2Gi | 8Gi | 40Gi RWO |
-| **Total** | | **4.25** | **31** | **~9.1Gi** | **58Gi** | **250Gi RWX + 190Gi RWO** |
+| **Total** | | **4.25** | **31** | **~9.1Gi** | **58Gi** | **250Gi RWX + 210Gi RWO** |
 
 The requests are small against the limits, so the scheduler places pods on
 their requests and the limits can burst. Plan for **at least 2 worker nodes**
@@ -369,15 +398,88 @@ Milvus waits for etcd and RustFS in an init container before starting.
 the database) and that KodOffice is up. CI installs the chart on a kind cluster
 and runs these tests for every pull request.
 
+## Backups
+
+`backup.enabled` (default `true`) runs `mariadb-dump` of the kodbox database,
+bundled or external, every night at 02:00 (`backup.schedule`, in `timezone`
+when set). Each run writes a gzipped dump to its own 20Gi volume
+(`<release>-backup`, `backup.persistence`) and keeps the newest 14
+(`backup.keep`). The job runs as the image's non-root `mysql` user, and
+`helm test` checks that a dump succeeds.
+
+What it doesn't cover:
+
+- **User files.** They live on the app volume; back that up with your storage
+  (e.g. CephFS snapshots). Restore files and database from the same point in time.
+- **Off-site copies.** The dumps sit in the same cluster and storage; copy them
+  elsewhere regularly.
+
+A dump is roughly 10-20% of the database size, so 14 dumps of a 5GB database
+need about 10-15GB. Check the job log: each run ends with `df -h /backup`.
+
+External database: the user needs `SELECT`, `SHOW VIEW`, `TRIGGER` and
+`LOCK TABLES`. MariaDB's client verifies TLS by default; for a server without
+TLS add `--skip-ssl` to `backup.extraArgs`.
+
+**Run a backup now:**
+
+```bash
+kubectl -n kodbox create job backup-manual-$(date +%s) --from=cronjob/kodbox-backup
+```
+
+**Restore** (release `kodbox` in namespace `kodbox`; stop the app first so
+nothing writes during the restore; with `app.autoscaling.enabled`, turn it off
+first or the autoscaler starts the app again):
+
+```bash
+kubectl -n kodbox scale deployment/kodbox-app --replicas=0
+
+# A pod with the backup volume mounted
+kubectl -n kodbox apply -f - <<'YAML'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kodbox-restore
+spec:
+  securityContext: {runAsUser: 999, runAsGroup: 999, fsGroup: 999}
+  containers:
+    - name: restore
+      image: docker.io/library/mariadb:12.3.3
+      command: ["sleep", "infinity"]
+      volumeMounts: [{name: backup, mountPath: /backup}]
+  volumes:
+    - name: backup
+      persistentVolumeClaim: {claimName: kodbox-backup}
+YAML
+kubectl -n kodbox wait --for=condition=Ready pod/kodbox-restore
+kubectl -n kodbox exec kodbox-restore -- ls -lt /backup
+
+# Load a dump into the database (replaces the kodbox database's tables)
+kubectl -n kodbox exec kodbox-restore -- cat /backup/kodbox-20261010-020000.sql.gz \
+  | gunzip \
+  | kubectl -n kodbox exec -i kodbox-db-0 -- sh -c 'mariadb -uroot -p"$MYSQL_ROOT_PASSWORD"'
+
+kubectl -n kodbox delete pod kodbox-restore
+kubectl -n kodbox scale deployment/kodbox-app --replicas=1
+```
+
+CI runs these steps on every chart change: three backups, pruning to `keep`,
+and a restore of the newest dump.
+
 ## Data and uninstall
 
 Uninstalling the release does **not** delete data:
 
 - The app volume is annotated `helm.sh/resource-policy: keep`.
+- The backup volume is annotated `helm.sh/resource-policy: keep`.
 - The db, redis, etcd, minio (RustFS) and milvus StatefulSets use
   `persistentVolumeClaimRetentionPolicy: Retain`.
 
 A reinstall with the same release name and namespace picks the volumes up again.
+For a new install on volumes from elsewhere (e.g. restored from a snapshot),
+`db.persistence.existingClaim` and `redis.persistence.existingClaim` use an
+existing PVC instead of the StatefulSet's own; this can't be switched on an
+existing release.
 To delete the data for good:
 
 ```bash
@@ -451,4 +553,460 @@ Flux runs real Helm installs and upgrades, where `lookup` works.
 | `<component>.podSecurityContext` | `RuntimeDefault` seccomp | Plus `<component>.securityContext` for containers |
 | `<component>.resources` | set for every component | All containers have requests and limits |
 
-See `values.yaml` for everything else.
+## All values
+
+Every key with its type, default and description, generated from
+`values.schema.json` and `values.yaml`. The same reference is on Artifact Hub
+under "Values schema".
+
+<!-- values:start (generated by scripts/gen_values_doc.py, do not edit) -->
+
+### global
+
+Global values, shared with parent charts.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `global.imageRegistry` | string | `""` | Registry for every image (a mirror or pull-through cache); overrides each image's registry. |
+
+### timezone
+
+IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.timezone. Empty keeps UTC.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `timezone` | string | `""` | IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.timezone. Empty keeps UTC. |
+
+### namespaceOverride
+
+Namespace for all resources; empty uses the release namespace.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `namespaceOverride` | string | `""` | Namespace for all resources; empty uses the release namespace. |
+
+### nameOverride
+
+Override the chart name used in resource names.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `nameOverride` | string | `""` | Override the chart name used in resource names. |
+
+### fullnameOverride
+
+Override the full resource name prefix.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `fullnameOverride` | string | `""` | Override the full resource name prefix. |
+
+### imagePullSecrets
+
+Image pull secrets for all pods.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `imagePullSecrets` | array | `[]` | Image pull secrets for all pods. |
+
+### serviceAccount
+
+ServiceAccount shared by all pods.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `serviceAccount.create` | boolean | `true` | Create the ServiceAccount. |
+| `serviceAccount.name` | string | `""` | ServiceAccount name; defaults to the release's full name, or "default" when create=false. |
+| `serviceAccount.annotations` | object | `{}` | ServiceAccount annotations. |
+| `serviceAccount.automountServiceAccountToken` | boolean | `false` | Mount the API token into pods; no component needs it. |
+
+### app
+
+Kodbox application (nginx + php-fpm, port 80).
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `app.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `app.image.repository` | string | `"kodcloud/kodbox"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `app.image.tag` | string / number | `""` | Image tag. |
+| `app.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `app.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `app.replicaCount` | integer | `1` | App replicas. Install with 1; more than 1 needs a ReadWriteMany volume. |
+| `app.podAntiAffinity` | "soft" \| "hard" \| "none" | `"soft"` | Spread replicas across nodes. Ignored when app.affinity is set. |
+| `app.autoscaling.enabled` | boolean | `false` | Create the HorizontalPodAutoscaler. |
+| `app.autoscaling.minReplicas` | integer | `2` | Minimum replicas. |
+| `app.autoscaling.maxReplicas` | integer | `8` | Maximum replicas. |
+| `app.autoscaling.targetCPUUtilizationPercentage` | integer / string | `70` | Average CPU utilization target (% of requests); empty disables. |
+| `app.autoscaling.targetMemoryUtilizationPercentage` | integer / string | `""` | Average memory utilization target (% of requests); empty disables. |
+| `app.autoscaling.behavior` | object | `{}` | HPA scaling behavior (scaleUp / scaleDown policies). |
+| `app.pdb.enabled` | boolean | `true` | Create the PodDisruptionBudget. |
+| `app.pdb.minAvailable` | integer / string | `1` | Minimum available pods (number or percentage). |
+| `app.strategy.type` | "Recreate" \| "RollingUpdate" | `"Recreate"` | Recreate for ReadWriteOnce volumes, RollingUpdate for ReadWriteMany. |
+| `app.strategy.rollingUpdate` | object |  | RollingUpdate parameters (maxSurge, maxUnavailable). |
+| `app.service.type` | "ClusterIP" \| "NodePort" \| "LoadBalancer" | `"ClusterIP"` | Service type. |
+| `app.service.port` | integer | `80` | Service port. |
+| `app.persistence.enabled` | boolean | `true` | Persist the kodbox site and user files on a PersistentVolumeClaim; false uses an emptyDir. |
+| `app.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
+| `app.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
+| `app.persistence.size` | string | `"8Gi"` | Volume size for the kodbox site and user files. |
+| `app.persistence.existingClaim` | string | `""` | Use an existing PersistentVolumeClaim instead of creating one. |
+| `app.persistence.annotations` | object | `{}` | Extra PVC annotations, e.g. for pvc-autoresizer. |
+| `app.waitForDependencies` | boolean | `true` | Wait for the database and redis to accept connections before starting kodbox. |
+| `app.resources` | object | `{"requests": {"cpu": "250m", "memory": "512Mi"}, "limits"...` | Kubernetes resource requests and limits for the app. |
+| `app.nodeSelector` | object | `{}` | Node labels for scheduling the app. |
+| `app.tolerations` | array | `[]` | Tolerations for the app pods. |
+| `app.affinity` | object | `{}` | Affinity rules for the app pods. |
+| `app.podAnnotations` | object | `{}` | Extra annotations for the app pods. |
+| `app.podLabels` | object | `{}` | Extra labels for the app pods. |
+| `app.priorityClassName` | string | `""` | PriorityClass for the app pods. |
+| `app.topologySpreadConstraints` | array | `[]` | Topology spread constraints for the app pods; a missing labelSelector is filled with the pod's labels. |
+| `app.extraEnv` | array | `[]` | Extra environment variables for the the app container. |
+| `app.livenessProbe` | object | `{}` | Liveness probe override for the app, merged over the chart default; enabled: false removes it. |
+| `app.readinessProbe` | object | `{}` | Readiness probe override for the app, merged over the chart default; enabled: false removes it. |
+| `app.startupProbe` | object | `{}` | Startup probe override for the app, merged over the chart default; enabled: false removes it. |
+| `app.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for the app pods. |
+| `app.securityContext` | object | `{}` | Container security context for the app containers. |
+
+### admin
+
+Initial kodbox admin account, applied only on the very first start.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `admin.bootstrap` | boolean | `true` | Create the admin account on first start; false lets the first visitor create it. |
+| `admin.username` | string | `"admin"` | Admin username. |
+| `admin.password` | string | `""` | Admin password; empty generates one. 8+ characters using 3 of digits, upper, lower and ~!@#$%^&*; no " $ ` or \. |
+| `admin.existingSecret` | string | `""` | Existing secret with KODBOX_ADMIN_USER and KODBOX_ADMIN_PASSWORD. |
+
+### database
+
+Database credentials shared by the db and app containers.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `database.name` | string | `"kodbox"` | Database name. |
+| `database.user` | string | `"kodbox"` | Database user. |
+| `database.password` | string | `""` | Database password; empty generates one. |
+| `database.rootPassword` | string | `""` | Database root password; empty generates one. |
+| `database.existingSecret` | string | `""` | Existing secret with MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD and MYSQL_ROOT_PASSWORD. |
+
+### db
+
+Bundled MariaDB. Set enabled=false and fill externalDatabase to use your own.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `db.enabled` | boolean | `true` | Deploy the bundled MariaDB. |
+| `db.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `db.image.repository` | string | `"library/mariadb"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `db.image.tag` | string / number | `"12.3.3"` | Image tag. |
+| `db.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `db.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `db.args` | array | `["--transaction-isolation=READ-COMMITTED"]` | Extra container arguments for MariaDB. |
+| `db.service.port` | integer | `3306` | Service port. |
+| `db.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
+| `db.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
+| `db.persistence.size` | string | `"4Gi"` | Volume size for MariaDB data. |
+| `db.persistence.existingClaim` | string | `""` | Existing PVC instead of the StatefulSet's volume; new installs only. |
+| `db.resources` | object | `{"requests": {"cpu": "250m", "memory": "512Mi"}, "limits"...` | Kubernetes resource requests and limits for MariaDB. |
+| `db.nodeSelector` | object | `{}` | Node labels for scheduling MariaDB. |
+| `db.tolerations` | array | `[]` | Tolerations for MariaDB pods. |
+| `db.affinity` | object | `{}` | Affinity rules for MariaDB pods. |
+| `db.podAnnotations` | object | `{}` | Extra annotations for MariaDB pods. |
+| `db.podLabels` | object | `{}` | Extra labels for MariaDB pods. |
+| `db.priorityClassName` | string | `""` | PriorityClass for MariaDB pods. |
+| `db.topologySpreadConstraints` | array | `[]` | Topology spread constraints for MariaDB pods; a missing labelSelector is filled with the pod's labels. |
+| `db.extraEnv` | array | `[]` | Extra environment variables for the MariaDB container. |
+| `db.livenessProbe` | object | `{}` | Liveness probe override for MariaDB, merged over the chart default; enabled: false removes it. |
+| `db.readinessProbe` | object | `{}` | Readiness probe override for MariaDB, merged over the chart default; enabled: false removes it. |
+| `db.startupProbe` | object | `{}` | Startup probe override for MariaDB, merged over the chart default; enabled: false removes it. |
+| `db.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for MariaDB pods. |
+| `db.securityContext` | object | `{}` | Container security context for MariaDB containers. |
+
+### externalDatabase
+
+External MySQL/MariaDB, used when db.enabled=false.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `externalDatabase.host` | string | `""` | Database host. |
+| `externalDatabase.port` | integer | `3306` | Database port. |
+
+### backup
+
+Scheduled mariadb-dump of the kodbox database onto a dedicated volume.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `backup.enabled` | boolean | `true` | Create the backup CronJob and volume. |
+| `backup.schedule` | string | `"0 2 * * *"` | Cron schedule, in timezone when set (else UTC). |
+| `backup.keep` | integer | `14` | Number of dumps to keep. |
+| `backup.extraArgs` | array | `[]` | Extra mariadb-dump options, e.g. --skip-ssl for an external server without TLS. |
+| `backup.image.registry` | string | `""` | Image registry. |
+| `backup.image.repository` | string | `""` | Image repository. |
+| `backup.image.tag` | string / number | `""` | Image tag. |
+| `backup.image.digest` | string | `""` | Image digest. |
+| `backup.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `backup.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
+| `backup.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
+| `backup.persistence.size` | string | `"20Gi"` | Volume size for database dumps. |
+| `backup.persistence.existingClaim` | string | `""` | Use an existing PersistentVolumeClaim instead of creating one. |
+| `backup.persistence.annotations` | object | `{}` | Extra PVC annotations. |
+| `backup.successfulJobsHistoryLimit` | integer | `3` | Finished successful Jobs to keep. |
+| `backup.failedJobsHistoryLimit` | integer | `3` | Failed Jobs to keep. |
+| `backup.startingDeadlineSeconds` | integer | `3600` | How late a run may start. |
+| `backup.resources` | object | `{"requests": {"cpu": "50m", "memory": "128Mi"}, "limits":...` | Kubernetes resource requests and limits for backups. |
+| `backup.nodeSelector` | object | `{}` | Node labels for scheduling backup. |
+| `backup.tolerations` | array | `[]` | Tolerations for backup pods. |
+| `backup.affinity` | object | `{}` | Affinity rules for backup pods. |
+| `backup.podAnnotations` | object | `{}` | Extra annotations for backup pods. |
+| `backup.podLabels` | object | `{}` | Extra labels for backup pods. |
+| `backup.priorityClassName` | string | `""` | PriorityClass for backup pods. |
+| `backup.topologySpreadConstraints` | array | `[]` | Topology spread constraints for backup pods; a missing labelSelector is filled with the pod's labels. |
+| `backup.extraEnv` | array | `[]` | Extra environment variables for the backup container. |
+| `backup.livenessProbe` | object |  | Liveness probe override for backup, merged over the chart default; enabled: false removes it. |
+| `backup.readinessProbe` | object |  | Readiness probe override for backup, merged over the chart default; enabled: false removes it. |
+| `backup.startupProbe` | object |  | Startup probe override for backup, merged over the chart default; enabled: false removes it. |
+| `backup.podSecurityContext` | object | `{"runAsNonRoot": true, "runAsUser": 999, "runAsGroup": 99...` | Pod security context for backup pods. |
+| `backup.securityContext` | object | `{"allowPrivilegeEscalation": false, "capabilities": {"dro...` | Container security context for backup containers. |
+
+### redis
+
+Bundled Redis for kodbox sessions and cache.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `redis.enabled` | boolean | `true` | Deploy the bundled Redis. |
+| `redis.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `redis.image.repository` | string | `"library/redis"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `redis.image.tag` | string / number | `"8.10.2-alpine"` | Image tag. |
+| `redis.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `redis.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `redis.args` | array | `["--appendonly", "yes", "--appendfsync", "everysec"]` | Extra container arguments for redis-server. |
+| `redis.service.port` | integer | `6379` | Service port. |
+| `redis.persistence.enabled` | boolean | `true` | Persist Redis append-only data on a PersistentVolumeClaim; false uses an emptyDir. |
+| `redis.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
+| `redis.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
+| `redis.persistence.size` | string | `"2Gi"` | Volume size for Redis append-only data. |
+| `redis.persistence.existingClaim` | string | `""` | Existing PVC instead of the StatefulSet's volume; new installs only. |
+| `redis.resources` | object | `{"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": ...` | Kubernetes resource requests and limits for Redis. |
+| `redis.nodeSelector` | object | `{}` | Node labels for scheduling Redis. |
+| `redis.tolerations` | array | `[]` | Tolerations for Redis pods. |
+| `redis.affinity` | object | `{}` | Affinity rules for Redis pods. |
+| `redis.podAnnotations` | object | `{}` | Extra annotations for Redis pods. |
+| `redis.podLabels` | object | `{}` | Extra labels for Redis pods. |
+| `redis.priorityClassName` | string | `""` | PriorityClass for Redis pods. |
+| `redis.topologySpreadConstraints` | array | `[]` | Topology spread constraints for Redis pods; a missing labelSelector is filled with the pod's labels. |
+| `redis.extraEnv` | array | `[]` | Extra environment variables for the Redis container. |
+| `redis.livenessProbe` | object | `{}` | Liveness probe override for Redis, merged over the chart default; enabled: false removes it. |
+| `redis.readinessProbe` | object | `{}` | Readiness probe override for Redis, merged over the chart default; enabled: false removes it. |
+| `redis.startupProbe` | object | `{}` | Startup probe override for Redis, merged over the chart default; enabled: false removes it. |
+| `redis.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}, "fsGroup":...` | Pod security context for Redis pods. |
+| `redis.securityContext` | object | `{}` | Container security context for Redis containers. |
+
+### externalRedis
+
+External Redis, used when redis.enabled=false. Empty host disables Redis. Applied on kodbox's first start only; must listen on 6379.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `externalRedis.host` | string | `""` | Redis host. |
+| `externalRedis.password` | string | `""` | Redis password. |
+| `externalRedis.existingSecret` | string | `""` | Existing secret holding the Redis password. |
+| `externalRedis.existingSecretKey` | string | `"REDIS_PASSWORD"` | Key of the password in existingSecret. |
+
+### kodoffice
+
+Document server (kodoffice or upstream ONLYOFFICE). Browsers load it directly, so it needs a user-reachable URL.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `kodoffice.enabled` | boolean | `true` | Deploy the document server. |
+| `kodoffice.edition` | "kodoffice" \| "onlyoffice" | `"kodoffice"` | kodoffice: kodcloud's ONLYOFFICE 7.4 build. onlyoffice: upstream ONLYOFFICE Document Server (onlyoffice.image). |
+| `kodoffice.image.registry` | string | `"registry.cn-hangzhou.aliyuncs.com"` | Image registry; global.imageRegistry overrides it. |
+| `kodoffice.image.repository` | string | `"kodcloud/kodoffice"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `kodoffice.image.tag` | string / number | `"7.4.1.1"` | Image tag. |
+| `kodoffice.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `kodoffice.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `kodoffice.onlyoffice.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `kodoffice.onlyoffice.image.repository` | string | `"onlyoffice/documentserver"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `kodoffice.onlyoffice.image.tag` | string / number | `"9.4.0.1"` | Image tag. |
+| `kodoffice.onlyoffice.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `kodoffice.onlyoffice.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `kodoffice.onlyoffice.allowPrivateIpAddress` | boolean | `true` | Let the server download documents from private IPs (kodbox URLs usually resolve to them). |
+| `kodoffice.onlyoffice.config` | object | `{"services": {"CoAuthoring": {"server": {"limits_tempfile...` | Overrides written to ONLYOFFICE's local-production-linux.json (highest precedence). |
+| `kodoffice.jwt.enabled` | true \| false \| "" | `""` | true/false, or "" for automatic: on for onlyoffice, off for kodoffice. |
+| `kodoffice.jwt.secret` | string | `""` | JWT secret; empty generates one, kept across upgrades. |
+| `kodoffice.jwt.existingSecret` | string | `""` | Existing secret holding the JWT secret. |
+| `kodoffice.jwt.existingSecretKey` | string | `"JWT_SECRET"` | Key of the JWT secret in existingSecret. |
+| `kodoffice.service.type` | "ClusterIP" \| "NodePort" \| "LoadBalancer" | `"ClusterIP"` | Service type. |
+| `kodoffice.service.port` | integer | `80` | Service port. |
+| `kodoffice.resources` | object | `{"requests": {"cpu": "500m", "memory": "1Gi"}, "limits": ...` | Kubernetes resource requests and limits for KodOffice. |
+| `kodoffice.nodeSelector` | object | `{}` | Node labels for scheduling KodOffice. |
+| `kodoffice.tolerations` | array | `[]` | Tolerations for KodOffice pods. |
+| `kodoffice.affinity` | object | `{}` | Affinity rules for KodOffice pods. |
+| `kodoffice.podAnnotations` | object | `{}` | Extra annotations for KodOffice pods. |
+| `kodoffice.podLabels` | object | `{}` | Extra labels for KodOffice pods. |
+| `kodoffice.priorityClassName` | string | `""` | PriorityClass for KodOffice pods. |
+| `kodoffice.topologySpreadConstraints` | array | `[]` | Topology spread constraints for KodOffice pods; a missing labelSelector is filled with the pod's labels. |
+| `kodoffice.extraEnv` | array | `[]` | Extra environment variables for the KodOffice container. |
+| `kodoffice.livenessProbe` | object | `{}` | Liveness probe override for KodOffice, merged over the chart default; enabled: false removes it. |
+| `kodoffice.readinessProbe` | object | `{}` | Readiness probe override for KodOffice, merged over the chart default; enabled: false removes it. |
+| `kodoffice.startupProbe` | object | `{}` | Startup probe override for KodOffice, merged over the chart default; enabled: false removes it. |
+| `kodoffice.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for KodOffice pods. |
+| `kodoffice.securityContext` | object | `{}` | Container security context for KodOffice containers. |
+
+### imaginary
+
+Imaginary thumbnail / image processing service.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `imaginary.enabled` | boolean | `true` | Deploy Imaginary. |
+| `imaginary.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `imaginary.image.repository` | string | `"nextcloud/aio-imaginary"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `imaginary.image.tag` | string / number | `"20260929_105435"` | Image tag. |
+| `imaginary.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `imaginary.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `imaginary.port` | integer | `9000` | Container port. |
+| `imaginary.args` | array | `["-enable-url-source", "-concurrency", "10", "-max-allowe...` | Extra container arguments for Imaginary. |
+| `imaginary.service.port` | integer | `9000` | Service port. |
+| `imaginary.resources` | object | `{"requests": {"cpu": "100m", "memory": "128Mi"}, "limits"...` | Kubernetes resource requests and limits for Imaginary. |
+| `imaginary.nodeSelector` | object | `{}` | Node labels for scheduling Imaginary. |
+| `imaginary.tolerations` | array | `[]` | Tolerations for Imaginary pods. |
+| `imaginary.affinity` | object | `{}` | Affinity rules for Imaginary pods. |
+| `imaginary.podAnnotations` | object | `{}` | Extra annotations for Imaginary pods. |
+| `imaginary.podLabels` | object | `{}` | Extra labels for Imaginary pods. |
+| `imaginary.priorityClassName` | string | `""` | PriorityClass for Imaginary pods. |
+| `imaginary.topologySpreadConstraints` | array | `[]` | Topology spread constraints for Imaginary pods; a missing labelSelector is filled with the pod's labels. |
+| `imaginary.extraEnv` | array | `[]` | Extra environment variables for the Imaginary container. |
+| `imaginary.livenessProbe` | object | `{}` | Liveness probe override for Imaginary, merged over the chart default; enabled: false removes it. |
+| `imaginary.readinessProbe` | object | `{}` | Readiness probe override for Imaginary, merged over the chart default; enabled: false removes it. |
+| `imaginary.startupProbe` | object | `{}` | Startup probe override for Imaginary, merged over the chart default; enabled: false removes it. |
+| `imaginary.podSecurityContext` | object | `{"runAsNonRoot": true, "runAsUser": 65534, "runAsGroup": ...` | Pod security context for Imaginary pods. |
+| `imaginary.securityContext` | object | `{"allowPrivilegeEscalation": false, "capabilities": {"dro...` | Container security context for Imaginary containers. |
+
+### milvus
+
+Milvus vector database stack (etcd + RustFS object storage + milvus standalone) for AI search.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `milvus.enabled` | boolean | `false` | Deploy etcd, RustFS (the minio component) and milvus. |
+| `milvus.etcd.image.registry` | string | `"quay.io"` | Image registry; global.imageRegistry overrides it. |
+| `milvus.etcd.image.repository` | string | `"coreos/etcd"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `milvus.etcd.image.tag` | string / number | `"v3.5.34"` | Image tag. |
+| `milvus.etcd.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `milvus.etcd.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `milvus.etcd.env` | object | `{"ETCD_AUTO_COMPACTION_MODE": "revision", "ETCD_AUTO_COMP...` | Environment variables for etcd, as NAME: value. |
+| `milvus.etcd.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
+| `milvus.etcd.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
+| `milvus.etcd.persistence.size` | string | `"4Gi"` | Volume size for etcd data. |
+| `milvus.etcd.resources` | object | `{"requests": {"cpu": "100m", "memory": "256Mi"}, "limits"...` | Kubernetes resource requests and limits for etcd. |
+| `milvus.etcd.nodeSelector` | object | `{}` | Node labels for scheduling etcd. |
+| `milvus.etcd.tolerations` | array | `[]` | Tolerations for etcd pods. |
+| `milvus.etcd.affinity` | object | `{}` | Affinity rules for etcd pods. |
+| `milvus.etcd.podAnnotations` | object | `{}` | Extra annotations for etcd pods. |
+| `milvus.etcd.podLabels` | object | `{}` | Extra labels for etcd pods. |
+| `milvus.etcd.priorityClassName` | string | `""` | PriorityClass for etcd pods. |
+| `milvus.etcd.topologySpreadConstraints` | array | `[]` | Topology spread constraints for etcd pods; a missing labelSelector is filled with the pod's labels. |
+| `milvus.etcd.extraEnv` | array | `[]` | Extra environment variables for the etcd container. |
+| `milvus.etcd.livenessProbe` | object | `{}` | Liveness probe override for etcd, merged over the chart default; enabled: false removes it. |
+| `milvus.etcd.readinessProbe` | object | `{}` | Readiness probe override for etcd, merged over the chart default; enabled: false removes it. |
+| `milvus.etcd.startupProbe` | object | `{}` | Startup probe override for etcd, merged over the chart default; enabled: false removes it. |
+| `milvus.etcd.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for etcd pods. |
+| `milvus.etcd.securityContext` | object | `{}` | Container security context for etcd containers. |
+| `milvus.minio.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `milvus.minio.image.repository` | string | `"rustfs/rustfs"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `milvus.minio.image.tag` | string / number | `"1.0.1"` | Image tag. |
+| `milvus.minio.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `milvus.minio.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `milvus.minio.rootUser` | string | `"minioadmin"` | RustFS access key (RUSTFS_ACCESS_KEY), also used by Milvus. |
+| `milvus.minio.rootPassword` | string | `""` | RustFS secret key (RUSTFS_SECRET_KEY); empty generates one. At least 8 characters. |
+| `milvus.minio.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
+| `milvus.minio.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
+| `milvus.minio.persistence.size` | string | `"8Gi"` | Volume size for RustFS data. |
+| `milvus.minio.resources` | object | `{"requests": {"cpu": "100m", "memory": "256Mi"}, "limits"...` | Kubernetes resource requests and limits for RustFS. |
+| `milvus.minio.nodeSelector` | object | `{}` | Node labels for scheduling RustFS. |
+| `milvus.minio.tolerations` | array | `[]` | Tolerations for RustFS pods. |
+| `milvus.minio.affinity` | object | `{}` | Affinity rules for RustFS pods. |
+| `milvus.minio.podAnnotations` | object | `{}` | Extra annotations for RustFS pods. |
+| `milvus.minio.podLabels` | object | `{}` | Extra labels for RustFS pods. |
+| `milvus.minio.priorityClassName` | string | `""` | PriorityClass for RustFS pods. |
+| `milvus.minio.topologySpreadConstraints` | array | `[]` | Topology spread constraints for RustFS pods; a missing labelSelector is filled with the pod's labels. |
+| `milvus.minio.extraEnv` | array | `[]` | Extra environment variables for the RustFS container. |
+| `milvus.minio.livenessProbe` | object | `{}` | Liveness probe override for RustFS, merged over the chart default; enabled: false removes it. |
+| `milvus.minio.readinessProbe` | object | `{}` | Readiness probe override for RustFS, merged over the chart default; enabled: false removes it. |
+| `milvus.minio.startupProbe` | object | `{}` | Startup probe override for RustFS, merged over the chart default; enabled: false removes it. |
+| `milvus.minio.podSecurityContext` | object | `{"runAsNonRoot": true, "runAsUser": 10001, "runAsGroup": ...` | Pod security context for RustFS pods. |
+| `milvus.minio.securityContext` | object | `{"allowPrivilegeEscalation": false, "capabilities": {"dro...` | Container security context for RustFS containers. |
+| `milvus.standalone.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `milvus.standalone.image.repository` | string | `"milvusdb/milvus"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `milvus.standalone.image.tag` | string / number | `"v2.6.25"` | Image tag. |
+| `milvus.standalone.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `milvus.standalone.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `milvus.standalone.mqType` | "woodpecker" \| "rocksmq" \| "pulsar" \| "kafka" | `"woodpecker"` | Milvus message queue. |
+| `milvus.standalone.service.type` | "ClusterIP" \| "NodePort" \| "LoadBalancer" | `"ClusterIP"` | Service type. |
+| `milvus.standalone.service.port` | integer | `19530` | gRPC port. |
+| `milvus.standalone.service.metricsPort` | integer | `9091` | Metrics / health port. |
+| `milvus.standalone.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
+| `milvus.standalone.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
+| `milvus.standalone.persistence.size` | string | `"8Gi"` | Volume size for Milvus data. |
+| `milvus.standalone.resources` | object | `{"requests": {"cpu": "500m", "memory": "2Gi"}, "limits": ...` | Kubernetes resource requests and limits for Milvus. |
+| `milvus.standalone.nodeSelector` | object | `{}` | Node labels for scheduling Milvus. |
+| `milvus.standalone.tolerations` | array | `[]` | Tolerations for Milvus pods. |
+| `milvus.standalone.affinity` | object | `{}` | Affinity rules for Milvus pods. |
+| `milvus.standalone.podAnnotations` | object | `{}` | Extra annotations for Milvus pods. |
+| `milvus.standalone.podLabels` | object | `{}` | Extra labels for Milvus pods. |
+| `milvus.standalone.priorityClassName` | string | `""` | PriorityClass for Milvus pods. |
+| `milvus.standalone.topologySpreadConstraints` | array | `[]` | Topology spread constraints for Milvus pods; a missing labelSelector is filled with the pod's labels. |
+| `milvus.standalone.extraEnv` | array | `[]` | Extra environment variables for the Milvus container. |
+| `milvus.standalone.livenessProbe` | object | `{}` | Liveness probe override for Milvus, merged over the chart default; enabled: false removes it. |
+| `milvus.standalone.readinessProbe` | object | `{}` | Readiness probe override for Milvus, merged over the chart default; enabled: false removes it. |
+| `milvus.standalone.startupProbe` | object | `{}` | Startup probe override for Milvus, merged over the chart default; enabled: false removes it. |
+| `milvus.standalone.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for Milvus pods. |
+| `milvus.standalone.securityContext` | object | `{}` | Container security context for Milvus containers. |
+
+### networkPolicy
+
+NetworkPolicies restricting access to the backing services.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `networkPolicy.enabled` | boolean | `true` | Create the NetworkPolicies. |
+| `networkPolicy.milvusExtraFrom` | array | `[]` | Extra NetworkPolicy 'from' peers allowed to reach Milvus. |
+
+### gateway
+
+Gateway API routing (HTTPRoutes, optionally a dedicated Gateway).
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `gateway.enabled` | boolean | `false` | Create HTTPRoutes. |
+| `gateway.parentRefs` | array | `[{"name": "gateway", "namespace": "gateway", "sectionName...` | Existing Gateway listeners to attach to (when create=false). |
+| `gateway.httpsRedirect.enabled` | boolean | `true` | Attach a redirect route to the Gateway's HTTP listener. |
+| `gateway.httpsRedirect.sectionName` | string | `"http"` | HTTP listener name on the existing Gateway. |
+| `gateway.create` | boolean | `false` | Deploy a dedicated Gateway instead of attaching to an existing one. |
+| `gateway.className` | string | `"cilium"` | GatewayClass for the dedicated Gateway. |
+| `gateway.gatewayAnnotations` | object | `{}` | Annotations for the dedicated Gateway. |
+| `gateway.tlsSecretName` | string | `""` | TLS secret for the dedicated Gateway's HTTPS listeners. |
+| `gateway.routeAnnotations` | object | `{}` | Annotations for the HTTPRoutes. |
+| `gateway.app.hostnames` | array | `["kodbox.example.com"]` | Hostnames for kodbox. |
+| `gateway.kodoffice.hostnames` | array | `["kodoffice.example.com"]` | Hostnames for KodOffice; [] skips the route. |
+| `gateway.timeouts.request` | string |  | Gateway API request timeout, e.g. 3600s. |
+| `gateway.timeouts.backendRequest` | string |  | Gateway API backendRequest timeout. |
+
+### ingress
+
+Ingress routing, for clusters with an Ingress controller.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `ingress.enabled` | boolean | `false` | Create the Ingress. |
+| `ingress.className` | string | `""` | IngressClass name. |
+| `ingress.annotations` | object | `{}` | Ingress annotations. |
+| `ingress.app.host` | string | `"kodbox.example.com"` | Hostname for kodbox. |
+| `ingress.kodoffice.host` | string | `""` | Hostname for KodOffice; empty skips it. |
+| `ingress.tls` | array | `[]` | Ingress TLS entries. |
+
+<!-- values:end -->

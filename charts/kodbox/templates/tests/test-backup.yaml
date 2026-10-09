@@ -1,0 +1,55 @@
+{{- if .Values.backup.enabled }}
+{{- /* helm test: runs the backup's mariadb-dump against the database (output discarded). */}}
+{{- $sel := dict "ctx" . "component" "backup" "v" .Values.backup }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "test-backup") }}
+  namespace: {{ include "kodbox.namespace" $ }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    # The backup component label lets the database NetworkPolicy admit it.
+    app.kubernetes.io/component: backup
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  serviceAccountName: {{ include "kodbox.serviceAccountName" . }}
+  automountServiceAccountToken: false
+  {{- with .Values.backup.podSecurityContext }}
+  securityContext:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  containers:
+    - name: test
+      image: {{ include "kodbox.backupImage" . }}
+      imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+      {{- with .Values.backup.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      command:
+        - bash
+        - -c
+        - |
+          set -euo pipefail
+          bytes=$({{ include "kodbox.backupDumpCommand" . }} | gzip | wc -c)
+          echo "backup dump OK: ${bytes} bytes compressed"
+      envFrom:
+        - secretRef:
+            name: {{ include "kodbox.dbSecretName" . }}
+      env:
+        {{- include "kodbox.backupEnv" . | nindent 8 }}
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+{{- end }}

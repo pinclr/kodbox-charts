@@ -5,6 +5,7 @@ on:
     paths:
       - "charts/**"
       - "ct.yaml"
+      - "scripts/**"
       - ".github/workflows/lint.yaml"
 
 jobs:
@@ -32,6 +33,16 @@ jobs:
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # values.schema.json and the README's values reference are generated;
+      # fail if they weren't regenerated after a change.
+      - name: Check generated files are up to date
+        run: |
+          pip install --quiet pyyaml
+          python3 scripts/gen_values_schema.py
+          python3 scripts/gen_values_doc.py
+          git diff --exit-code -- charts/*/values.schema.json charts/*/README.md \
+            || { echo "::error::Run scripts/gen_values_schema.py and scripts/gen_values_doc.py and commit the result"; exit 1; }
 
       # Fails if a changed chart doesn't bump its Chart.yaml version, so every
       # merge to main produces a new release.
@@ -96,6 +107,59 @@ jobs:
           ct install --config ct.yaml --namespace kodbox-ci
           --upgrade --skip-missing-values
           --target-branch ${{ github.event.repository.default_branch }}
+
+      # Runs the real backup CronJob three times with keep=2 (each run must write a
+      # dump, the third must prune the oldest), then restores the newest dump
+      # with the README's commands and checks a marker row survives.
+      - name: Test database backup and restore
+        run: |
+          ns=backup-ci
+          db() { kubectl -n $ns exec bk-kodbox-db-0 -- sh -c "mariadb -uroot -p\"\$MYSQL_ROOT_PASSWORD\" kodbox -N -e \"$1\""; }
+          kubectl create namespace $ns
+          helm install bk charts/kodbox -n $ns \
+            --set kodoffice.enabled=false --set imaginary.enabled=false \
+            --set backup.keep=2 --set timezone=Asia/Shanghai
+          kubectl -n $ns rollout status statefulset/bk-kodbox-db --timeout=300s
+          db "CREATE TABLE ci_marker (v VARCHAR(32)); INSERT INTO ci_marker VALUES ('restored-ok');"
+
+          for run in 1 2 3; do
+            kubectl -n $ns create job "backup-$run" --from=cronjob/bk-kodbox-backup
+            kubectl -n $ns wait --for=condition=complete "job/backup-$run" --timeout=300s
+            kubectl -n $ns logs "job/backup-$run"
+            sleep 2
+          done
+          kubectl -n $ns logs job/backup-3 | grep -q "^removed '/backup/kodbox-" \
+            || { echo "::error::third backup run did not prune the oldest dump"; exit 1; }
+
+          db "DROP TABLE ci_marker;"
+          kubectl -n $ns scale deployment/bk-kodbox-app --replicas=0
+          kubectl -n $ns apply -f - <<'YAML'
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: bk-restore
+          spec:
+            securityContext: {runAsUser: 999, runAsGroup: 999, fsGroup: 999}
+            containers:
+              - name: restore
+                image: docker.io/library/mariadb:12.3.3
+                command: ["sleep", "infinity"]
+                volumeMounts: [{name: backup, mountPath: /backup}]
+            volumes:
+              - name: backup
+                persistentVolumeClaim: {claimName: bk-kodbox-backup}
+          YAML
+          kubectl -n $ns wait --for=condition=Ready pod/bk-restore --timeout=180s
+          kubectl -n $ns exec bk-restore -- ls -lt /backup
+          [ "$(kubectl -n $ns exec bk-restore -- sh -c 'ls /backup/*.sql.gz | wc -l')" -eq 2 ] \
+            || { echo "::error::expected exactly 2 dumps after pruning"; exit 1; }
+          latest=$(kubectl -n $ns exec bk-restore -- sh -c 'ls -1t /backup/*.sql.gz | head -1')
+          kubectl -n $ns exec bk-restore -- cat "$latest" \
+            | gunzip \
+            | kubectl -n $ns exec -i bk-kodbox-db-0 -- sh -c 'mariadb -uroot -p"$MYSQL_ROOT_PASSWORD"'
+          [ "$(db 'SELECT v FROM ci_marker;')" = "restored-ok" ] \
+            || { echo "::error::marker row missing after restore"; exit 1; }
+          echo "backup and restore OK"
 
       - name: Show cluster state on failure
         if: failure()

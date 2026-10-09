@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/pinclr/kodbox-charts/security/advisories/new
+    about: Please report security issues privately, not as public issues.
+  - name: kodbox itself
+    url: https://github.com/kalcaddle/kodbox/issues
+    about: Problems with kodbox (not the chart) belong upstream.

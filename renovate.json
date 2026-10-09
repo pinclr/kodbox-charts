@@ -1,0 +1,65 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommitsDisabled"],
+  "timezone": "Asia/Shanghai",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "labels": ["dependencies"],
+  "enabledManagers": ["helm-values", "github-actions"],
+  "helm-values": {
+    "managerFilePatterns": ["/(^|/)charts/[^/]+/values(-[^/]*)?\\.yaml$/"]
+  },
+  "packageRules": [
+    {
+      "description": "Image updates bump the chart's patch version, so the PR passes the version check and releases on merge",
+      "matchManagers": ["helm-values"],
+      "bumpVersion": "patch"
+    },
+    {
+      "description": "MariaDB: stay on the 12.3 LTS line",
+      "matchPackageNames": ["docker.io/library/mariadb", "library/mariadb", "mariadb"],
+      "allowedVersions": "/^12\\.3\\.\\d+$/"
+    },
+    {
+      "description": "etcd: Milvus 2.6 is tested with etcd 3.5",
+      "matchPackageNames": ["quay.io/coreos/etcd"],
+      "allowedVersions": "/^v3\\.5\\.\\d+$/"
+    },
+    {
+      "description": "Milvus: stay on 2.6 (3.0 is untested with kodbox); plain CPU tags only",
+      "matchPackageNames": ["docker.io/milvusdb/milvus", "milvusdb/milvus"],
+      "allowedVersions": "/^v2\\.6\\.\\d+$/"
+    },
+    {
+      "description": "RustFS: stable releases only",
+      "matchPackageNames": ["docker.io/rustfs/rustfs", "rustfs/rustfs"],
+      "allowedVersions": "/^\\d+\\.\\d+\\.\\d+$/"
+    },
+    {
+      "description": "Redis: official alpine tags",
+      "matchPackageNames": ["docker.io/library/redis", "library/redis", "redis"],
+      "versioning": "docker"
+    },
+    {
+      "description": "Imaginary (Nextcloud AIO) is tagged by build date: YYYYMMDD_HHMMSS",
+      "matchPackageNames": ["docker.io/nextcloud/aio-imaginary", "nextcloud/aio-imaginary"],
+      "versioning": "regex:^(?<major>\\d{8})_(?<minor>\\d{6})$"
+    },
+    {
+      "description": "ONLYOFFICE Document Server: four-part versions, e.g. 9.4.0.1",
+      "matchPackageNames": ["docker.io/onlyoffice/documentserver", "onlyoffice/documentserver"],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$"
+    },
+    {
+      "description": "kodcloud images only publish moving tags; pin them by hand",
+      "matchPackageNames": ["/kodcloud\\//"],
+      "enabled": false
+    },
+    {
+      "description": "GitHub Actions: group minor/patch updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "GitHub Actions"
+    }
+  ]
+}

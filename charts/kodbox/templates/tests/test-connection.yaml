@@ -4,6 +4,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: {{ include "kodbox.componentName" (dict "ctx" . "component" "test") }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: test

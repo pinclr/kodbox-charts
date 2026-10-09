@@ -5,6 +5,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: etcd
@@ -20,6 +21,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: etcd
@@ -63,16 +65,15 @@ spec:
           ports:
             - name: client
               containerPort: 2379
-          livenessProbe:
-            exec:
-              command: ["etcdctl", "endpoint", "health"]
-            periodSeconds: 30
-            timeoutSeconds: 20
-          readinessProbe:
-            exec:
-              command: ["etcdctl", "endpoint", "health"]
-            periodSeconds: 10
-            timeoutSeconds: 20
+          {{- include "kodbox.probe" (dict "name" "startupProbe" "default" `` "override" $v.startupProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "livenessProbe" "default" `exec:
+  command: ["etcdctl", "endpoint", "health"]
+periodSeconds: 30
+timeoutSeconds: 20` "override" $v.livenessProbe) | nindent 10 }}
+          {{- include "kodbox.probe" (dict "name" "readinessProbe" "default" `exec:
+  command: ["etcdctl", "endpoint", "health"]
+periodSeconds: 10
+timeoutSeconds: 20` "override" $v.readinessProbe) | nindent 10 }}
           volumeMounts:
             - name: data
               mountPath: /etcd

@@ -1,0 +1,77 @@
+{{- if .Values.backup.enabled }}
+{{- $sel := dict "ctx" . "component" "backup" "v" .Values.backup }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "kodbox.componentName" $sel }}
+  namespace: {{ include "kodbox.namespace" $ }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  {{- with .Values.timezone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: {{ .Values.backup.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 10800
+      template:
+        metadata:
+          labels:
+            {{- include "kodbox.podLabels" $sel | nindent 12 }}
+          {{- with .Values.backup.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          {{- include "kodbox.podScheduling" $sel | nindent 10 }}
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: {{ include "kodbox.backupImage" . }}
+              imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+              {{- with .Values.backup.securityContext }}
+              securityContext:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              command:
+                - bash
+                - -c
+                - |
+                  set -euo pipefail
+                  file="/backup/${MYSQL_DATABASE}-$(date +%Y%m%d-%H%M%S).sql.gz"
+                  echo "Dumping ${MYSQL_DATABASE} from ${DB_HOST}:${DB_PORT} to ${file}"
+                  # Written as .partial and renamed on success, so a failed run
+                  # never leaves a truncated dump that counts as a backup.
+                  {{ include "kodbox.backupDumpCommand" . }} | gzip > "${file}.partial"
+                  mv "${file}.partial" "${file}"
+                  ls -lh "${file}"
+                  # Keep the newest $KEEP dumps.
+                  ls -1t /backup/"${MYSQL_DATABASE}"-*.sql.gz | tail -n +$((KEEP + 1)) | xargs -r rm -v --
+                  df -h /backup
+              envFrom:
+                - secretRef:
+                    name: {{ include "kodbox.dbSecretName" . }}
+              env:
+                {{- include "kodbox.backupEnv" . | nindent 16 }}
+                {{- with (include "kodbox.extraEnv" $sel | trim) }}
+                {{- . | nindent 16 }}
+                {{- end }}
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+              {{- with .Values.backup.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: {{ .Values.backup.persistence.existingClaim | default (include "kodbox.componentName" $sel) }}
+{{- end }}
