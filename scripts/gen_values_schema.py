@@ -192,9 +192,21 @@ schema = {
             "existingSecret": s("Existing secret holding the Redis password."),
             "existingSecretKey": s("Key of the password in existingSecret.", minLength=1),
         }),
-        "kodoffice": obj("KodOffice document server. Browsers load it directly, so it needs a user-reachable URL.", {
-            "enabled": b("Deploy KodOffice."),
+        "kodoffice": obj("Document server (kodoffice or upstream ONLYOFFICE). Browsers load it directly, so it needs a user-reachable URL.", {
+            "enabled": b("Deploy the document server."),
+            "edition": {"type": "string", "enum": ["kodoffice", "onlyoffice"], "description": "kodoffice: kodcloud's ONLYOFFICE 7.4 build. onlyoffice: upstream ONLYOFFICE Document Server (onlyoffice.image)."},
             "image": image("KodOffice"),
+            "onlyoffice": obj("Settings for edition=onlyoffice.", {
+                "image": image("ONLYOFFICE Document Server"),
+                "allowPrivateIpAddress": b("Let the server download documents from private IPs (kodbox URLs usually resolve to them)."),
+                "config": free("Overrides written to ONLYOFFICE's local-production-linux.json (highest precedence)."),
+            }),
+            "jwt": obj("JWT shared between kodbox and the document server.", {
+                "enabled": {"type": ["boolean", "string"], "enum": [True, False, ""], "description": "true/false, or \"\" for automatic: on for onlyoffice, off for kodoffice."},
+                "secret": s("JWT secret; empty generates one, kept across upgrades."),
+                "existingSecret": s("Existing secret holding the JWT secret."),
+                "existingSecretKey": s("Key of the JWT secret in existingSecret.", minLength=1),
+            }),
             "service": obj("KodOffice Service.", {"type": SERVICE_TYPE, "port": port("Service port.")}),
             "resources": resources("KodOffice"),
             **sched("KodOffice"),

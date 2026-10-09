@@ -746,11 +746,19 @@
     },
     "kodoffice": {
       "type": "object",
-      "description": "KodOffice document server. Browsers load it directly, so it needs a user-reachable URL.",
+      "description": "Document server (kodoffice or upstream ONLYOFFICE). Browsers load it directly, so it needs a user-reachable URL.",
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Deploy KodOffice."
+          "description": "Deploy the document server."
+        },
+        "edition": {
+          "type": "string",
+          "enum": [
+            "kodoffice",
+            "onlyoffice"
+          ],
+          "description": "kodoffice: kodcloud's ONLYOFFICE 7.4 build. onlyoffice: upstream ONLYOFFICE Document Server (onlyoffice.image)."
         },
         "image": {
           "type": "object",
@@ -790,6 +798,92 @@
           "required": [
             "repository"
           ]
+        },
+        "onlyoffice": {
+          "type": "object",
+          "description": "Settings for edition=onlyoffice.",
+          "properties": {
+            "image": {
+              "type": "object",
+              "description": "Container image for ONLYOFFICE Document Server.",
+              "properties": {
+                "registry": {
+                  "type": "string",
+                  "description": "Image registry; global.imageRegistry overrides it."
+                },
+                "repository": {
+                  "type": "string",
+                  "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Image tag."
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+                  "pattern": "^(sha256:[a-f0-9]{64})?$"
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ],
+                  "description": "Image pull policy."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "repository"
+              ]
+            },
+            "allowPrivateIpAddress": {
+              "type": "boolean",
+              "description": "Let the server download documents from private IPs (kodbox URLs usually resolve to them)."
+            },
+            "config": {
+              "type": "object",
+              "description": "Overrides written to ONLYOFFICE's local-production-linux.json (highest precedence)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "jwt": {
+          "type": "object",
+          "description": "JWT shared between kodbox and the document server.",
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "enum": [
+                true,
+                false,
+                ""
+              ],
+              "description": "true/false, or \"\" for automatic: on for onlyoffice, off for kodoffice."
+            },
+            "secret": {
+              "type": "string",
+              "description": "JWT secret; empty generates one, kept across upgrades."
+            },
+            "existingSecret": {
+              "type": "string",
+              "description": "Existing secret holding the JWT secret."
+            },
+            "existingSecretKey": {
+              "type": "string",
+              "description": "Key of the JWT secret in existingSecret.",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
         },
         "service": {
           "type": "object",

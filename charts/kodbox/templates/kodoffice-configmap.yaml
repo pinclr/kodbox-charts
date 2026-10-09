@@ -1,0 +1,13 @@
+{{- if and .Values.kodoffice.enabled (eq .Values.kodoffice.edition "onlyoffice") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kodbox.componentName" (dict "ctx" . "component" "kodoffice") }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kodoffice
+data:
+  # Loaded after the local.json the entrypoint writes, so these settings win.
+  local-production-linux.json: |
+    {{- .Values.kodoffice.onlyoffice.config | toPrettyJson | nindent 4 }}
+{{- end }}

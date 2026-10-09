@@ -256,12 +256,61 @@ externalRedis:
 ## user-reachable URL (see ingress.kodoffice).
 kodoffice:
   enabled: true
+  # Which document server runs as the kodoffice component:
+  # - kodoffice: kodcloud's build of ONLYOFFICE 7.4 (Chinese fonts, JWT off)
+  # - onlyoffice: upstream ONLYOFFICE Document Server Community Edition
+  #   (onlyoffice.image), configured like kodoffice; enable kodbox's onlyoffice
+  #   plugin and give it the JWT secret. See README "Document server".
+  edition: kodoffice
   image:
     registry: registry.cn-hangzhou.aliyuncs.com
     repository: kodcloud/kodoffice
     tag: 7.4.1.1
     digest: ""
     pullPolicy: IfNotPresent
+  onlyoffice:
+    image:
+      registry: docker.io
+      repository: onlyoffice/documentserver
+      tag: 9.4.0.1
+      digest: ""
+      pullPolicy: IfNotPresent
+    # kodbox hands the server file URLs that often resolve to private IPs
+    # (in-cluster or on-prem); upstream refuses those by default.
+    allowPrivateIpAddress: true
+    # Overrides for ONLYOFFICE's config, written to local-production-linux.json
+    # (highest precedence). The defaults match kodoffice's limits: 500MB files,
+    # 10 minute downloads. Arrays replace upstream's whole array.
+    config:
+      services:
+        CoAuthoring:
+          server:
+            limits_tempfile_upload: 524288000
+      FileConverter:
+        converter:
+          maxDownloadBytes: 524288000
+          downloadTimeout:
+            connectionAndInactivity: 10m
+            wholeCycle: 10m
+          inputLimits:
+            - type: docx;dotx;docm;dotm
+              zip: {uncompressed: 500MB, template: "*.xml"}
+            - type: xlsx;xltx;xlsm;xltm
+              zip: {uncompressed: 500MB, template: "*.xml"}
+            - type: pptx;ppsx;potx;pptm;ppsm;potm
+              zip: {uncompressed: 500MB, template: "*.xml"}
+            - type: vsdx;vstx;vssx;vsdm;vstm;vssm
+              zip: {uncompressed: 500MB, template: "*.xml"}
+  # JWT between kodbox and the document server. enabled "" means automatic: on
+  # for onlyoffice (upstream would otherwise pick a new random secret on every
+  # start), off for kodoffice (matching that image's default).
+  jwt:
+    enabled: ""
+    # Left empty, a random secret is generated on install and kept across upgrades.
+    secret: ""
+    # Pre-created secret holding the JWT secret under existingSecretKey.
+    existingSecret: ""
+    existingSecretKey: JWT_SECRET
   service:
     type: ClusterIP
     port: 80

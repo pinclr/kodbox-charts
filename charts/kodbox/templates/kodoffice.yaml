@@ -1,5 +1,8 @@
 {{- if .Values.kodoffice.enabled }}
 {{- $sel := dict "ctx" . "component" "kodoffice" "v" .Values.kodoffice }}
+{{- $onlyoffice := eq .Values.kodoffice.edition "onlyoffice" }}
+{{- $image := ternary .Values.kodoffice.onlyoffice.image .Values.kodoffice.image $onlyoffice }}
+{{- $jwt := include "kodbox.kodofficeJwt" . }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -32,33 +35,49 @@ spec:
     metadata:
       labels:
         {{- include "kodbox.podLabels" $sel | nindent 8 }}
-      {{- with .Values.kodoffice.podAnnotations }}
       annotations:
+        checksum/config: {{ toJson .Values.kodoffice.onlyoffice.config | sha256sum }}
+        checksum/jwt: {{ toYaml .Values.kodoffice.jwt | sha256sum }}
+        {{- with .Values.kodoffice.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       {{- include "kodbox.podScheduling" $sel | nindent 6 }}
       containers:
         - name: kodoffice
-          image: {{ include "kodbox.image" (dict "ctx" $ "image" .Values.kodoffice.image) }}
-          imagePullPolicy: {{ .Values.kodoffice.image.pullPolicy }}
+          image: {{ include "kodbox.image" (dict "ctx" $ "image" $image) }}
+          imagePullPolicy: {{ $image.pullPolicy }}
           {{- with .Values.kodoffice.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with (include "kodbox.extraEnv" $sel | trim) }}
           env:
+            - name: JWT_ENABLED
+              value: {{ ternary "true" "false" (eq $jwt "true") | quote }}
+            {{- if $jwt }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kodbox.kodofficeJwtSecretName" . }}
+                  key: {{ ternary .Values.kodoffice.jwt.existingSecretKey "JWT_SECRET" (ne .Values.kodoffice.jwt.existingSecret "") }}
+            {{- end }}
+            {{- if $onlyoffice }}
+            - name: ALLOW_PRIVATE_IP_ADDRESS
+              value: {{ .Values.kodoffice.onlyoffice.allowPrivateIpAddress | toString | quote }}
+            {{- end }}
+            {{- with (include "kodbox.extraEnv" $sel | trim) }}
             {{- . | nindent 12 }}
-          {{- end }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 80
+          # First start generates fonts and initialises the internal database.
           startupProbe:
             httpGet:
               path: /healthcheck
               port: http
             periodSeconds: 10
-            failureThreshold: 30
+            failureThreshold: 60
           # The document server briefly returns 502 while its internal services
           # restart, so tolerate a few failures before restarting the pod.
           livenessProbe:
@@ -74,8 +93,21 @@ spec:
               port: http
             periodSeconds: 10
             timeoutSeconds: 5
+          {{- if $onlyoffice }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/onlyoffice/documentserver/local-production-linux.json
+              subPath: local-production-linux.json
+              readOnly: true
+          {{- end }}
           {{- with .Values.kodoffice.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- if $onlyoffice }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "kodbox.componentName" $sel }}
+      {{- end }}
 {{- end }}

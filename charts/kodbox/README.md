@@ -86,6 +86,44 @@ e.g. `nginx.ingress.kubernetes.io/proxy-body-size: "0"`.
 Uploads and downloads are fine while data flows. `gateway.timeouts` sets the
 HTTPRoute request timeouts but doesn't change a proxy's idle timeout.
 
+## Document server
+
+The `kodoffice` component runs one of two document servers
+(`kodoffice.edition`); service, hostnames and routes are the same for both:
+
+| | `kodoffice` (default) | `onlyoffice` |
+|---|---|---|
+| Image | kodcloud's ONLYOFFICE 7.4 build (`kodoffice.image`) | Upstream ONLYOFFICE Document Server Community Edition 9.4 (`kodoffice.onlyoffice.image`) |
+| kodbox plugin | kodoffice | onlyoffice |
+| JWT | Off (image default) | On, with a generated secret kept across upgrades |
+| Security | Outdated (many fixable CVEs) | Maintained upstream |
+| Fonts | Chinese fonts included | Basic fonts; add CJK fonts if documents need them |
+
+With `onlyoffice` the chart reproduces kodoffice's settings that matter to
+kodbox: downloads from private IPs are allowed (`onlyoffice.allowPrivateIpAddress`;
+kodbox's file URLs usually resolve to private addresses), and files up to 500MB
+with 10 minute download timeouts (`onlyoffice.config`, written to
+`local-production-linux.json`).
+
+To switch:
+
+1. `--set kodoffice.edition=onlyoffice` and upgrade.
+2. Read the JWT secret (printed by `helm status`, or
+   `kubectl get secret <release>-kodoffice -o jsonpath='{.data.JWT_SECRET}' | base64 -d`).
+3. In kodbox, enable the **onlyoffice** plugin with the document server's
+   public URL and the JWT secret, and disable the kodoffice plugin.
+
+`kodoffice.jwt.enabled` overrides the automatic choice; set it to `false` only
+if your kodbox plugin has no secret setting (anyone who can reach the server
+can then use it). `kodoffice.jwt.existingSecret` uses a pre-created secret.
+
+**Scaling:** both editions run as a single replica: the image bundles its own
+PostgreSQL, RabbitMQ and Redis, and open documents live in that pod. Give it
+more CPU and memory to serve more users. For a horizontally scaled server use
+ONLYOFFICE's own Kubernetes chart (Docs), set `kodoffice.enabled=false` and point
+kodbox's onlyoffice plugin at it. The Community Edition limits concurrent
+connections either way.
+
 ## Images and registries
 
 Each image has `registry`, `repository`, `tag` and `digest`:
@@ -99,7 +137,7 @@ Each image has `registry`, `repository`, `tag` and `digest`:
 | etcd | `quay.io/coreos/etcd:v3.5.34` (official) |
 | minio | `docker.io/rustfs/rustfs:1.0.1` (S3/MinIO-compatible; MinIO's community images were removed) |
 | milvus | `docker.io/milvusdb/milvus:v2.6.25` (official) |
-| kodoffice | `registry.cn-hangzhou.aliyuncs.com/kodcloud/kodoffice:7.4.1.1` (only published by kodcloud) |
+| kodoffice | `registry.cn-hangzhou.aliyuncs.com/kodcloud/kodoffice:7.4.1.1` (only published by kodcloud), or `docker.io/onlyoffice/documentserver:9.4.0.1` with `kodoffice.edition=onlyoffice` |
 
 Images are pinned to versions so upgrades are deliberate. Every pull request
 scans them with Trivy (see the "Image scan" job summary).
@@ -401,6 +439,7 @@ Flux runs real Helm installs and upgrades, where `lookup` works.
 | `redis.enabled` / `externalRedis.host` | `true` / `""` | Use an external Redis; `externalRedis.password` or `existingSecret` for auth. Port must be 6379, applied on first start only |
 | `redis.persistence.enabled` / `size` | `true` / `2Gi` | `false` for in-memory only |
 | `kodoffice.enabled` / `imaginary.enabled` | `true` | |
+| `kodoffice.edition` | `kodoffice` | `onlyoffice` for upstream ONLYOFFICE 9.4 with JWT |
 | `milvus.enabled` | `false` | etcd + RustFS (`minio`) + milvus for AI search |
 | `gateway.enabled` | `false` | Gateway API HTTPRoutes |
 | `ingress.enabled` | `false` | |

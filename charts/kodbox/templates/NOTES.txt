@@ -32,6 +32,10 @@ In-cluster endpoints to configure in the kodbox admin panel / plugins:
 {{- if .Values.kodoffice.enabled }}
   kodoffice: {{ if and .Values.gateway.enabled .Values.gateway.kodoffice.hostnames }}https://{{ first .Values.gateway.kodoffice.hostnames }}{{ else if .Values.ingress.kodoffice.host }}http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.kodoffice.host }}{{ else }}(not exposed - set ingress.kodoffice.host; browsers must reach it){{ end }}
 {{- end }}
+{{- if and .Values.kodoffice.enabled (include "kodbox.kodofficeJwt" .) }}
+  {{ .Values.kodoffice.edition }} JWT secret (enter it in kodbox's {{ .Values.kodoffice.edition }} plugin settings):
+    kubectl -n {{ .Release.Namespace }} get secret {{ include "kodbox.kodofficeJwtSecretName" . }} -o jsonpath='{.data.{{ ternary .Values.kodoffice.jwt.existingSecretKey "JWT_SECRET" (ne .Values.kodoffice.jwt.existingSecret "") }}}' | base64 -d
+{{- end }}
 {{- if .Values.imaginary.enabled }}
   imaginary: http://{{ include "kodbox.componentName" (dict "ctx" . "component" "imaginary") }}:{{ .Values.imaginary.service.port }}
 {{- end }}
