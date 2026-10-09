@@ -1,0 +1,39 @@
+suite: autoscaling and disruption budget
+templates:
+  - templates/app-deployment.yaml
+  - templates/app-configmap.yaml
+  - templates/app-hpa.yaml
+  - templates/app-pdb.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+set:
+  app.persistence.accessModes: [ReadWriteMany]
+  app.strategy.type: RollingUpdate
+tests:
+  - it: leaves replicas to the HPA when autoscaling
+    template: templates/app-deployment.yaml
+    set:
+      app.autoscaling.enabled: true
+    asserts:
+      - notExists:
+          path: spec.replicas
+  - it: creates the HPA with min, max and the CPU target
+    template: templates/app-hpa.yaml
+    set:
+      app.autoscaling.enabled: true
+    asserts:
+      - equal: {path: spec.minReplicas, value: 2}
+      - equal: {path: spec.maxReplicas, value: 8}
+      - equal: {path: "spec.metrics[0].resource.target.averageUtilization", value: 70}
+  - it: adds a PDB once two replicas must run
+    template: templates/app-pdb.yaml
+    set:
+      app.autoscaling.enabled: true
+    asserts:
+      - hasDocuments: {count: 1}
+      - equal: {path: spec.minAvailable, value: 1}
+  - it: has no PDB for a single replica
+    template: templates/app-pdb.yaml
+    asserts:
+      - hasDocuments: {count: 0}

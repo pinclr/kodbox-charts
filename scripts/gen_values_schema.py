@@ -46,6 +46,26 @@ def resources(what):
     return free(f"Kubernetes resource requests and limits for {what}.")
 
 
+def extras(what):
+    """Extra volumes, mounts and sidecars, wired into every workload (not the backup job)."""
+    return {
+        "extraVolumes": free(f"Extra volumes on the {what} pod.", "array"),
+        "extraVolumeMounts": free(f"Extra volume mounts on the {what} container, pairing with extraVolumes.", "array"),
+        "extraContainers": free(f"Extra sidecar containers in the {what} pod, e.g. a Prometheus exporter.", "array"),
+    }
+
+
+SVC_EXTRA = {
+    "annotations": free("Service annotations, e.g. for a cloud load balancer."),
+}
+SVC_LB = {
+    "loadBalancerSourceRanges": free("Client CIDRs allowed to reach a LoadBalancer Service.", "array"),
+}
+SVC_NODEPORT = {
+    "nodePort": {"type": ["integer", "string"], "description": "Fixed node port for type NodePort/LoadBalancer; empty lets Kubernetes assign one."},
+}
+
+
 ENV = {
     "type": "array",
     "items": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
@@ -106,8 +126,12 @@ schema = {
     "properties": {
         "global": obj("Global values, shared with parent charts.", {
             "imageRegistry": s("Registry for every image (a mirror or pull-through cache); overrides each image's registry."),
+            "storageClass": s("Storage class for every volume without its own; \"-\" disables dynamic provisioning."),
         }, strict=False),
         "timezone": s("IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.timezone. Empty keeps UTC.", pattern="^([A-Za-z_]+(/[A-Za-z0-9_+-]+)*)?$"),
+        "commonLabels": free("Labels added to every resource and pod."),
+        "commonAnnotations": free("Annotations added to every resource."),
+        "revisionHistoryLimit": {"type": "integer", "minimum": 0, "description": "Old ReplicaSets / StatefulSet revisions kept for rollbacks."},
         "namespaceOverride": s("Namespace for all resources; empty uses the release namespace."),
         "nameOverride": s("Override the chart name used in resource names."),
         "fullnameOverride": s("Override the full resource name prefix."),
@@ -142,19 +166,18 @@ schema = {
                 "type": {"type": "string", "enum": ["Recreate", "RollingUpdate"], "description": "Recreate for ReadWriteOnce volumes, RollingUpdate for ReadWriteMany."},
                 "rollingUpdate": free("RollingUpdate parameters (maxSurge, maxUnavailable)."),
             }),
-            "service": obj("App Service.", {"type": SERVICE_TYPE, "port": port("Service port.")}),
+            "service": obj("App Service.", {"type": SERVICE_TYPE, "port": port("Service port."), **SVC_EXTRA, **SVC_NODEPORT, **SVC_LB}),
             "persistence": persistence("the kodbox site and user files", "/var/www/html", toggle=True, extra={
                 "existingClaim": s("Use an existing PersistentVolumeClaim instead of creating one."),
                 "annotations": free("Extra PVC annotations, e.g. for pvc-autoresizer."),
             }),
-            "waitForDependencies": b("Wait for the database and redis to accept connections before starting kodbox."),
+            "waitForDependencies": b("Wait in an init container for the database and redis before starting kodbox; off by default since the image waits itself."),
             "preStopSleepSeconds": {"type": "integer", "minimum": 0, "description": "Seconds the pod keeps serving after termination starts, while it's removed from routing; 0 disables."},
             "terminationGracePeriodSeconds": {"type": "integer", "minimum": 1, "description": "Time for the preStop sleep plus nginx/php-fpm to stop gracefully."},
             "lifecycle": free("Container lifecycle hooks; replaces the default preStop sleep when set."),
             "resources": resources("the app"),
-            "extraVolumes": free("Extra volumes on the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf.", "array"),
-            "extraVolumeMounts": free("Extra volume mounts on the app container, pairing with app.extraVolumes.", "array"),
-            **sched("the app"),
+            **sched("app"),
+            **extras("app"),
         }),
         "admin": obj("Initial kodbox admin account, applied only on the very first start.", {
             "bootstrap": b("Create the admin account on first start; false lets the first visitor create it."),
@@ -177,13 +200,13 @@ schema = {
             "enabled": b("Deploy the bundled MariaDB."),
             "image": image("MariaDB"),
             "args": args("MariaDB"),
-            "service": obj("MariaDB Service.", {"port": port("Service port.")}),
+            "service": obj("MariaDB Service.", {"port": port("Service port."), **SVC_EXTRA}),
             "persistence": persistence("MariaDB data", "/var/lib/mysql", extra={
                 "existingClaim": s("Existing PVC instead of the StatefulSet's volume; new installs only."),
             }),
             "resources": resources("MariaDB"),
-            "extraContainers": free("Extra sidecar containers for MariaDB, e.g. mysqld_exporter.", "array"),
             **sched("MariaDB"),
+            **extras("MariaDB"),
         }),
         "externalDatabase": obj("External MySQL/MariaDB, used when db.enabled=false.", {
             "host": s("Database host."),
@@ -215,13 +238,13 @@ schema = {
             "enabled": b("Deploy the bundled Redis."),
             "image": image("Redis"),
             "args": args("redis-server"),
-            "service": obj("Redis Service.", {"port": port("Service port.")}),
+            "service": obj("Redis Service.", {"port": port("Service port."), **SVC_EXTRA}),
             "persistence": persistence("Redis append-only data", "/data", toggle=True, extra={
                 "existingClaim": s("Existing PVC instead of the StatefulSet's volume; new installs only."),
             }),
             "resources": resources("Redis"),
-            "extraContainers": free("Extra sidecar containers for Redis, e.g. redis_exporter.", "array"),
             **sched("Redis"),
+            **extras("Redis"),
         }),
         "externalRedis": obj("External Redis, used when redis.enabled=false. Empty host disables Redis. Applied on kodbox's first start only; must listen on 6379.", {
             "host": s("Redis host."),
@@ -244,18 +267,20 @@ schema = {
                 "existingSecret": s("Existing secret holding the JWT secret."),
                 "existingSecretKey": s("Key of the JWT secret in existingSecret.", minLength=1),
             }),
-            "service": obj("KodOffice Service.", {"type": SERVICE_TYPE, "port": port("Service port.")}),
+            "service": obj("KodOffice Service.", {"type": SERVICE_TYPE, "port": port("Service port."), **SVC_EXTRA, **SVC_NODEPORT, **SVC_LB}),
             "resources": resources("KodOffice"),
             **sched("KodOffice"),
+            **extras("KodOffice"),
         }),
         "imaginary": obj("Imaginary thumbnail / image processing service.", {
             "enabled": b("Deploy Imaginary."),
             "image": image("Imaginary"),
             "port": port("Container port."),
             "args": args("Imaginary"),
-            "service": obj("Imaginary Service.", {"port": port("Service port.")}),
+            "service": obj("Imaginary Service.", {"port": port("Service port."), **SVC_EXTRA}),
             "resources": resources("Imaginary"),
             **sched("Imaginary"),
+            **extras("Imaginary"),
         }),
         "milvus": obj("Milvus vector database stack (etcd + RustFS object storage + milvus standalone) for AI search.", {
             "enabled": b("Deploy etcd, RustFS (the minio component) and milvus."),
@@ -269,6 +294,7 @@ schema = {
                 "persistence": persistence("etcd data", "/etcd"),
                 "resources": resources("etcd"),
                 **sched("etcd"),
+            **extras("etcd"),
             }),
             "minio": obj("S3 object storage for Milvus segments, indexes and WAL. Runs RustFS (S3/MinIO-compatible); keeps the name minio.", {
                 "image": image("RustFS"),
@@ -278,6 +304,7 @@ schema = {
                 "persistence": persistence("RustFS data", "/data"),
                 "resources": resources("RustFS"),
                 **sched("RustFS"),
+            **extras("RustFS"),
             }),
             "standalone": obj("Milvus standalone server.", {
                 "image": image("Milvus"),
@@ -286,10 +313,13 @@ schema = {
                     "type": SERVICE_TYPE,
                     "port": port("gRPC port."),
                     "metricsPort": port("Metrics / health port."),
+                    **SVC_EXTRA,
+                    **SVC_LB,
                 }),
                 "persistence": persistence("Milvus data", "/var/lib/milvus"),
                 "resources": resources("Milvus"),
                 **sched("Milvus"),
+            **extras("Milvus"),
             }),
         }),
         "networkPolicy": obj("NetworkPolicies restricting access to the backing services.", {

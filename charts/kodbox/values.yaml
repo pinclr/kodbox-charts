@@ -7,6 +7,16 @@ global:
   # Registry for every image (a mirror or pull-through cache holding the same
   # repository paths). Overrides each image's registry.
   imageRegistry: ""
+  # Storage class for every volume whose own storageClass is empty; "-" sets
+  # an empty storageClassName (no dynamic provisioning). Empty: cluster default.
+  storageClass: ""
+
+# Labels and annotations added to every resource (labels also to pods).
+commonLabels: {}
+commonAnnotations: {}
+
+# Old ReplicaSets / StatefulSet revisions kept for rollbacks.
+revisionHistoryLimit: 10
 
 # IANA time zone for every component, e.g. Asia/Shanghai: sets TZ in each
 # container and PHP's date.timezone for kodbox. Empty keeps the images' UTC.
@@ -76,6 +86,11 @@ app:
   service:
     type: ClusterIP
     port: 80
+    annotations: {}
+    # With type NodePort/LoadBalancer: fixed node port (empty: assigned).
+    nodePort: ""
+    # With type LoadBalancer: client CIDRs allowed to connect.
+    loadBalancerSourceRanges: []
 
   persistence:
     enabled: true
@@ -93,6 +108,8 @@ app:
 
   # Extra environment variables for the app container
   extraEnv: []
+  # Extra sidecar containers.
+  extraContainers: []
   #  - name: TZ
   #    value: Asia/Shanghai
 
@@ -128,8 +145,9 @@ app:
   #    topologyKey: topology.kubernetes.io/zone
   #    whenUnsatisfiable: ScheduleAnyway
 
-  # Wait for the database and redis to accept connections before starting.
-  waitForDependencies: true
+  # Wait in an init container for the database and redis before starting.
+  # Off by default: the image's entrypoint already waits and retries.
+  waitForDependencies: false
 
   # Graceful shutdown. On termination the pod keeps serving for
   # preStopSleepSeconds while the Service and gateway stop routing to it, then
@@ -194,6 +212,7 @@ db:
     - --transaction-isolation=READ-COMMITTED
   service:
     port: 3306
+    annotations: {}
   persistence:
     # Mounted at /var/lib/mysql (compose: ./db)
     storageClass: ""
@@ -218,6 +237,9 @@ db:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  # Extra volumes on the pod and mounts on the main container.
+  extraVolumes: []
+  extraVolumeMounts: []
   # Extra sidecar containers, e.g. mysqld_exporter for Prometheus metrics.
   extraContainers: []
   #  - name: mysqld-exporter
@@ -323,6 +345,7 @@ redis:
     - everysec
   service:
     port: 6379
+    annotations: {}
   persistence:
     enabled: true
     # Mounted at /data. Empty storageClass uses the cluster default.
@@ -348,6 +371,9 @@ redis:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  # Extra volumes on the pod and mounts on the main container.
+  extraVolumes: []
+  extraVolumeMounts: []
   # Extra sidecar containers, e.g. redis_exporter for Prometheus metrics.
   extraContainers: []
   #  - name: redis-exporter
@@ -440,6 +466,11 @@ kodoffice:
   service:
     type: ClusterIP
     port: 80
+    annotations: {}
+    # With type NodePort/LoadBalancer: fixed node port (empty: assigned).
+    nodePort: ""
+    # With type LoadBalancer: client CIDRs allowed to connect.
+    loadBalancerSourceRanges: []
   resources:
     requests:
       cpu: 500m
@@ -455,6 +486,11 @@ kodoffice:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  # Extra volumes on the pod and mounts on the main container.
+  extraVolumes: []
+  extraVolumeMounts: []
+  # Extra sidecar containers.
+  extraContainers: []
   podSecurityContext:
     seccompProfile:
       type: RuntimeDefault
@@ -486,6 +522,7 @@ imaginary:
     - "500"
   service:
     port: 9000
+    annotations: {}
   resources:
     requests:
       cpu: 100m
@@ -501,6 +538,11 @@ imaginary:
   priorityClassName: ""
   topologySpreadConstraints: []
   extraEnv: []
+  # Extra volumes on the pod and mounts on the main container.
+  extraVolumes: []
+  extraVolumeMounts: []
+  # Extra sidecar containers.
+  extraContainers: []
   # The image runs as nobody, so it meets the "restricted" Pod Security Standard.
   podSecurityContext:
     runAsNonRoot: true
@@ -558,6 +600,11 @@ milvus:
     priorityClassName: ""
     topologySpreadConstraints: []
     extraEnv: []
+    # Extra volumes on the pod and mounts on the main container.
+    extraVolumes: []
+    extraVolumeMounts: []
+    # Extra sidecar containers.
+    extraContainers: []
     podSecurityContext:
       seccompProfile:
         type: RuntimeDefault
@@ -605,6 +652,11 @@ milvus:
     priorityClassName: ""
     topologySpreadConstraints: []
     extraEnv: []
+    # Extra volumes on the pod and mounts on the main container.
+    extraVolumes: []
+    extraVolumeMounts: []
+    # Extra sidecar containers.
+    extraContainers: []
     # RustFS runs as uid 10001; fsGroup makes the volume writable for it.
     podSecurityContext:
       runAsNonRoot: true
@@ -636,6 +688,9 @@ milvus:
       type: ClusterIP
       port: 19530
       metricsPort: 9091
+      annotations: {}
+      # With type LoadBalancer: client CIDRs allowed to connect.
+      loadBalancerSourceRanges: []
     persistence:
       storageClass: ""
       accessModes:
@@ -656,6 +711,11 @@ milvus:
     priorityClassName: ""
     topologySpreadConstraints: []
     extraEnv: []
+    # Extra volumes on the pod and mounts on the main container.
+    extraVolumes: []
+    extraVolumeMounts: []
+    # Extra sidecar containers.
+    extraContainers: []
     podSecurityContext:
       seccompProfile:
         type: RuntimeDefault

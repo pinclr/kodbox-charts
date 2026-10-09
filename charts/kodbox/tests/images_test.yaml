@@ -1,0 +1,50 @@
+suite: image references
+templates:
+  - templates/app-deployment.yaml
+  - templates/app-configmap.yaml
+  - templates/db.yaml
+  - templates/backup-cronjob.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+tests:
+  - it: defaults the app tag to appVersion
+    template: templates/app-deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: docker.io/kodcloud/kodbox:1.68.10
+  - it: global.imageRegistry replaces the registry
+    template: templates/db.yaml
+    documentSelector: {path: kind, value: StatefulSet}
+    set:
+      global.imageRegistry: harbor.example.com/mirror
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: harbor.example.com/mirror/library/mariadb:12.3.3
+  - it: appends a digest after the tag
+    template: templates/app-deployment.yaml
+    set:
+      app.image.digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: docker.io/kodcloud/kodbox:1.68.10@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  - it: keeps a repository that already names a registry host
+    template: templates/app-deployment.yaml
+    set:
+      global.imageRegistry: ignored.example.com
+      app.image.repository: quay.io/example/kodbox
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: quay.io/example/kodbox:1.68.10
+  - it: backup image falls back to db.image
+    template: templates/backup-cronjob.yaml
+    set:
+      backup.enabled: true
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].image
+          value: docker.io/library/mariadb:12.3.3

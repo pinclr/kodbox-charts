@@ -8,6 +8,7 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: imaginary
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" .Values.imaginary.service.annotations) | nindent 2 }}
 spec:
   selector:
     {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
@@ -24,7 +25,9 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: imaginary
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
+  revisionHistoryLimit: {{ include "kodbox.revisionHistoryLimit" . }}
   replicas: 1
   selector:
     matchLabels:
@@ -69,8 +72,19 @@ periodSeconds: 20` "override" .Values.imaginary.livenessProbe) | nindent 10 }}
   path: /health
   port: http
 periodSeconds: 10` "override" .Values.imaginary.readinessProbe) | nindent 10 }}
+          {{- with .Values.imaginary.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.imaginary.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- with (include "kodbox.extraContainers" (dict "v" .Values.imaginary) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.imaginary.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
 {{- end }}

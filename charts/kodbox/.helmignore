@@ -7,3 +7,6 @@
 .idea/
 .vscode/
 ci/
+# helm-unittest suites (tests/), not part of the package
+*_test.yaml
+tests/__snapshot__/

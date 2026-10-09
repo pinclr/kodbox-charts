@@ -8,6 +8,7 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" .Values.redis.service.annotations) | nindent 2 }}
 spec:
   selector:
     {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
@@ -24,7 +25,9 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
+  revisionHistoryLimit: {{ include "kodbox.revisionHistoryLimit" . }}
   serviceName: {{ include "kodbox.componentName" $sel }}
   replicas: 1
   selector:
@@ -74,6 +77,9 @@ timeoutSeconds: 5` "override" .Values.redis.readinessProbe) | nindent 10 }}
           volumeMounts:
             - name: data
               mountPath: /data
+            {{- with .Values.redis.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- with .Values.redis.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -81,15 +87,19 @@ timeoutSeconds: 5` "override" .Values.redis.readinessProbe) | nindent 10 }}
         {{- with (include "kodbox.extraContainers" (dict "v" .Values.redis) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
-      {{- if not .Values.redis.persistence.enabled }}
+      {{- if or (not .Values.redis.persistence.enabled) .Values.redis.persistence.existingClaim .Values.redis.extraVolumes }}
       volumes:
+        {{- if not .Values.redis.persistence.enabled }}
         - name: data
           emptyDir: {}
-      {{- else if .Values.redis.persistence.existingClaim }}
-      volumes:
+        {{- else if .Values.redis.persistence.existingClaim }}
         - name: data
           persistentVolumeClaim:
             claimName: {{ .Values.redis.persistence.existingClaim }}
+        {{- end }}
+        {{- with .Values.redis.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
   {{- if and .Values.redis.persistence.enabled (not .Values.redis.persistence.existingClaim) }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
@@ -102,9 +112,7 @@ timeoutSeconds: 5` "override" .Values.redis.readinessProbe) | nindent 10 }}
       spec:
         accessModes:
           {{- toYaml .Values.redis.persistence.accessModes | nindent 10 }}
-        {{- with .Values.redis.persistence.storageClass }}
-        storageClassName: {{ . | quote }}
-        {{- end }}
+        {{- include "kodbox.storageClass" (dict "ctx" $ "sc" .Values.redis.persistence.storageClass) | nindent 8 }}
         resources:
           requests:
             storage: {{ .Values.redis.persistence.size }}

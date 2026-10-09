@@ -2,7 +2,7 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.7.3
+version: 0.8.0
 appVersion: "1.68.10"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
@@ -28,7 +28,19 @@ annotations:
       url: https://kodcloud.com
   artifacthub.io/changes: |
     - kind: added
-      description: db.extraContainers and redis.extraContainers add sidecar containers, e.g. mysqld_exporter and redis_exporter for Prometheus metrics
+      description: commonLabels and commonAnnotations on every resource
+    - kind: added
+      description: global.storageClass for every volume; "-" disables dynamic provisioning
+    - kind: added
+      description: revisionHistoryLimit for all Deployments and StatefulSets
+    - kind: added
+      description: Service annotations for every component; nodePort and loadBalancerSourceRanges for the app and kodoffice Services
+    - kind: added
+      description: extraVolumes, extraVolumeMounts and extraContainers for every component
+    - kind: changed
+      description: app.waitForDependencies defaults to false; the image already waits for the database and redis
+    - kind: added
+      description: Template unit tests (helm-unittest), run in CI
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc

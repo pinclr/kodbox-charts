@@ -1,0 +1,67 @@
+suite: value checks
+templates:
+  - templates/app-deployment.yaml
+  - templates/app-configmap.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+tests:
+  - it: refuses several replicas on a ReadWriteOnce volume
+    template: templates/app-deployment.yaml
+    set:
+      app.replicaCount: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: needs a ReadWriteMany volume
+  - it: refuses several replicas without redis
+    template: templates/app-deployment.yaml
+    set:
+      app.replicaCount: 2
+      app.persistence.accessModes: [ReadWriteMany]
+      redis.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: needs redis for shared sessions
+  - it: refuses a PDB that blocks drains
+    template: templates/app-deployment.yaml
+    set:
+      app.replicaCount: 2
+      app.persistence.accessModes: [ReadWriteMany]
+      app.pdb.minAvailable: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: app.pdb.minAvailable must be lower
+  - it: applies the replica checks to autoscaling too
+    template: templates/app-deployment.yaml
+    set:
+      app.autoscaling.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: needs a ReadWriteMany volume
+  - it: refuses maxReplicas below minReplicas
+    template: templates/app-deployment.yaml
+    set:
+      app.persistence.accessModes: [ReadWriteMany]
+      app.autoscaling.enabled: true
+      app.autoscaling.minReplicas: 3
+      app.autoscaling.maxReplicas: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: maxReplicas must be at least minReplicas
+  - it: refuses a preStop sleep as long as the grace period
+    template: templates/app-deployment.yaml
+    set:
+      app.preStopSleepSeconds: 60
+    asserts:
+      - failedTemplate:
+          errorPattern: app.preStopSleepSeconds must be lower
+  - it: accepts several replicas on a shared volume with redis
+    template: templates/app-deployment.yaml
+    set:
+      app.replicaCount: 2
+      app.persistence.accessModes: [ReadWriteMany]
+      app.strategy.type: RollingUpdate
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2

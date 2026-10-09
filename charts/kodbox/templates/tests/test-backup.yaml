@@ -10,9 +10,7 @@ metadata:
     {{- include "kodbox.labels" . | nindent 4 }}
     # The backup component label lets the database NetworkPolicy admit it.
     app.kubernetes.io/component: backup
-  annotations:
-    helm.sh/hook: test
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" (dict "helm.sh/hook" "test" "helm.sh/hook-delete-policy" "before-hook-creation,hook-succeeded")) | nindent 2 }}
 spec:
   restartPolicy: Never
   serviceAccountName: {{ include "kodbox.serviceAccountName" . }}

@@ -30,6 +30,22 @@ app.kubernetes.io/name: {{ include "kodbox.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Values.commonLabels }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}
+
+{{/*
+Resource annotations: commonAnnotations merged with the resource's own (which
+win). Renders nothing when both are empty.
+Call with (dict "ctx" $ "extra" <map or nil>), at indent 2 under metadata.
+*/}}
+{{- define "kodbox.annotations" -}}
+{{- $a := merge (dict) (.extra | default dict) (.ctx.Values.commonAnnotations | default dict) }}
+{{- with $a }}
+annotations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 {{- end }}
 
 {{/* Selector labels for a component. Call with (dict "ctx" $ "component" "app") */}}
@@ -81,6 +97,24 @@ An explicit 0 still disables the preStop sleep.
 
 {{- define "kodbox.appGracePeriod" -}}
 {{- int (ternary .Values.app.terminationGracePeriodSeconds 60 (hasKey .Values.app "terminationGracePeriodSeconds")) }}
+{{- end }}
+
+{{/*
+storageClassName for a volume: the component's storageClass, else
+global.storageClass, else omitted (cluster default). "-" sets an empty
+storageClassName, disabling dynamic provisioning.
+*/}}
+{{- define "kodbox.storageClass" -}}
+{{- $sc := default (.ctx.Values.global | default dict).storageClass .sc }}
+{{- if eq (toString $sc) "-" }}
+storageClassName: ""
+{{- else if $sc }}
+storageClassName: {{ $sc | quote }}
+{{- end }}
+{{- end }}
+
+{{- define "kodbox.revisionHistoryLimit" -}}
+{{- int (ternary .Values.revisionHistoryLimit 10 (hasKey .Values "revisionHistoryLimit")) }}
 {{- end }}
 
 {{- define "kodbox.adminSecretName" -}}
@@ -206,6 +240,9 @@ Call with (dict "name" "livenessProbe" "default" `...` "override" .Values.x.live
 {{/* Pod template labels. Call with (dict "ctx" $ "component" "app" "v" .Values.app) */}}
 {{- define "kodbox.podLabels" -}}
 {{ include "kodbox.selectorLabels" . }}
+{{- with .ctx.Values.commonLabels }}
+{{ toYaml . }}
+{{- end }}
 {{- with .v.podLabels }}
 {{ toYaml . }}
 {{- end }}

@@ -1,0 +1,47 @@
+suite: extra volumes, mounts and containers
+templates:
+  - templates/imaginary.yaml
+  - templates/db.yaml
+  - templates/kodoffice.yaml
+  - templates/app-deployment.yaml
+  - templates/app-configmap.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+tests:
+  - it: adds volumes, mounts and a sidecar where the chart has none
+    template: templates/imaginary.yaml
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      imaginary.extraVolumes: [{name: tmp, emptyDir: {}}]
+      imaginary.extraVolumeMounts: [{name: tmp, mountPath: /tmp}]
+      imaginary.extraContainers: [{name: sidecar, image: busybox}]
+    asserts:
+      - equal: {path: "spec.template.spec.volumes[0].name", value: tmp}
+      - equal: {path: "spec.template.spec.containers[0].volumeMounts[0].mountPath", value: /tmp}
+      - equal: {path: "spec.template.spec.containers[1].name", value: sidecar}
+  - it: appends to the chart's own mounts
+    template: templates/db.yaml
+    documentSelector: {path: kind, value: StatefulSet}
+    set:
+      db.extraVolumes: [{name: conf, configMap: {name: my-cnf}}]
+      db.extraVolumeMounts: [{name: conf, mountPath: /etc/mysql/conf.d}]
+    asserts:
+      - equal: {path: "spec.template.spec.containers[0].volumeMounts[0].name", value: data}
+      - equal: {path: "spec.template.spec.containers[0].volumeMounts[1].name", value: conf}
+      - equal: {path: "spec.template.spec.volumes[0].name", value: conf}
+  - it: works for the kodoffice edition, which has no volumes of its own
+    template: templates/kodoffice.yaml
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      kodoffice.extraVolumes: [{name: fonts, emptyDir: {}}]
+      kodoffice.extraVolumeMounts: [{name: fonts, mountPath: /usr/share/fonts/custom}]
+    asserts:
+      - lengthEqual: {path: spec.template.spec.volumes, count: 1}
+      - equal: {path: "spec.template.spec.containers[0].volumeMounts[0].name", value: fonts}
+  - it: adds app sidecars after the kodbox container
+    template: templates/app-deployment.yaml
+    set:
+      app.extraContainers: [{name: exporter, image: nginx/nginx-prometheus-exporter}]
+    asserts:
+      - equal: {path: "spec.template.spec.containers[1].name", value: exporter}
