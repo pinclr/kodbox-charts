@@ -5,6 +5,56 @@ entries:
       artifacthub.io/category: storage
       artifacthub.io/changes: |
         - kind: added
+          description: commonLabels and commonAnnotations on every resource
+        - kind: added
+          description: global.storageClass for every volume; "-" disables dynamic provisioning
+        - kind: added
+          description: revisionHistoryLimit for all Deployments and StatefulSets
+        - kind: added
+          description: Service annotations for every component; nodePort and loadBalancerSourceRanges for the app and kodoffice Services
+        - kind: added
+          description: extraVolumes, extraVolumeMounts and extraContainers for every component
+        - kind: changed
+          description: app.waitForDependencies defaults to false; the image already waits for the database and redis
+        - kind: added
+          description: Template unit tests (helm-unittest), run in CI
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/pinclr/kodbox-charts
+        - name: kodbox
+          url: https://kodcloud.com
+      artifacthub.io/signKey: |
+        fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
+        url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
+    apiVersion: v2
+    appVersion: 1.68.10
+    created: "2026-10-10T00:01:13.924253751Z"
+    description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
+    digest: 13908836a04e36f5a1ddfd8e84741ea10f85ecc40e9578ac9b0baee568abe0c9
+    home: https://github.com/pinclr/kodbox-charts
+    icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
+    keywords:
+    - kodbox
+    - file-manager
+    - cloud-storage
+    - office
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: pinclr
+      url: https://github.com/pinclr
+    name: kodbox
+    sources:
+    - https://github.com/pinclr/kodbox-charts
+    - https://github.com/kalcaddle/kodbox
+    type: application
+    urls:
+    - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.8.0/kodbox-0.8.0.tgz
+    version: 0.8.0
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |
+        - kind: added
           description: db.extraContainers and redis.extraContainers add sidecar containers, e.g. mysqld_exporter and redis_exporter for Prometheus metrics
       artifacthub.io/license: Apache-2.0
       artifacthub.io/links: |
@@ -740,4 +790,4 @@ entries:
     urls:
     - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.0/kodbox-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-09T07:07:24.585542892Z"
+generated: "2026-10-10T00:01:13.924476136Z"
