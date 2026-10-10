@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.list-changed.outputs.changed }}
+      upgrade-test: ${{ steps.list-changed.outputs.upgrade-test }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,6 +33,10 @@ jobs:
           changed=$(ct list-changed --config ct.yaml --target-branch ${{ github.event.repository.default_branch }})
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          # The minor-version upgrade test also runs when its script changes.
+          if [[ -n "$changed" ]] || ! git diff --quiet "origin/${{ github.event.repository.default_branch }}...HEAD" -- scripts/ci-upgrade-test.sh; then
+            echo "upgrade-test=true" >> "$GITHUB_OUTPUT"
           fi
 
       # values.schema.json and the README's values reference are generated;
@@ -206,6 +211,52 @@ jobs:
           for pod in $(kubectl get pods -A -l app.kubernetes.io/name=kodbox -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'); do
             echo "::group::logs $pod"
             kubectl logs -n "${pod%/*}" "${pod#*/}" --all-containers --tail=100 || true
+            echo "::endgroup::"
+          done
+
+  # Upgrades the newest published release to the working copy when the minor
+  # version changes (ct's upgrade test only covers patch bumps).
+  upgrade:
+    needs: lint
+    if: needs.lint.outputs.upgrade-test == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # release tags hold the old ci/*-values.yaml
+
+      - uses: azure/setup-helm@v4
+
+      - uses: helm/kind-action@v1.12.0
+
+      - name: Create namespace enforcing Pod Security baseline
+        run: |
+          kubectl create namespace kodbox-ci
+          kubectl label namespace kodbox-ci \
+            pod-security.kubernetes.io/enforce=baseline \
+            pod-security.kubernetes.io/warn=restricted
+
+      - name: Start external Redis
+        run: |
+          kubectl -n kodbox-ci create deployment redis-ext --image=redis:7-alpine --port=6379 \
+            -- redis-server --requirepass ci-redis-pass
+          kubectl -n kodbox-ci expose deployment redis-ext --port=6379
+          kubectl -n kodbox-ci rollout status deployment/redis-ext --timeout=180s
+
+      - name: Upgrade from the last published minor release
+        run: |
+          for chart in charts/*/; do
+            scripts/ci-upgrade-test.sh "${chart%/}" kodbox-ci https://pinclr.github.io/kodbox-charts
+          done
+
+      - name: Show cluster state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide
+          kubectl get events -A --sort-by=.lastTimestamp | tail -50
+          for pod in $(kubectl get pods -n kodbox-ci -o name); do
+            echo "::group::logs $pod"
+            kubectl -n kodbox-ci logs "$pod" --all-containers --tail=80 || true
             echo "::endgroup::"
           done
 
