@@ -36,8 +36,9 @@ welcome; for security issues see [SECURITY.md](SECURITY.md).
 
 5. Open a pull request. CI lints the chart, runs the unit tests, checks the
    version bump, the changelog annotation and the generated files, installs it on a kind cluster for each
-   `charts/kodbox/ci/*-values.yaml` (plus an upgrade from the released
-   version), runs `helm test`, tests backup and restore, and scans the images
+   `charts/kodbox/ci/*-values.yaml`, tests upgrades from the newest published
+   release (patch bumps through chart-testing, minor bumps through
+   `scripts/ci-upgrade-test.sh`; major bumps are skipped), runs `helm test`, tests backup and restore, and scans the images
    with Trivy.
 
 ## Releases
