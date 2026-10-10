@@ -1,0 +1,81 @@
+suite: probes, shutdown, document server, backups
+templates:
+  - templates/db.yaml
+  - templates/app-deployment.yaml
+  - templates/app-configmap.yaml
+  - templates/kodoffice.yaml
+  - templates/backup-cronjob.yaml
+  - templates/networkpolicy.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+tests:
+  - it: merges probe overrides over the defaults
+    template: templates/db.yaml
+    documentSelector: {path: kind, value: StatefulSet}
+    set:
+      db.livenessProbe: {periodSeconds: 60}
+      db.readinessProbe: {enabled: false}
+    asserts:
+      - equal: {path: "spec.template.spec.containers[0].livenessProbe.periodSeconds", value: 60}
+      - equal: {path: "spec.template.spec.containers[0].livenessProbe.exec.command", value: [healthcheck.sh, --connect]}
+      - notExists: {path: "spec.template.spec.containers[0].readinessProbe"}
+  - it: sleeps before stopping and allows a grace period
+    template: templates/app-deployment.yaml
+    asserts:
+      - equal: {path: spec.template.spec.terminationGracePeriodSeconds, value: 60}
+      - equal: {path: "spec.template.spec.containers[0].lifecycle.preStop.exec.command", value: [sleep, "10"]}
+  - it: falls back to the shutdown defaults when the keys are missing (--reuse-values)
+    template: templates/app-deployment.yaml
+    set:
+      app.preStopSleepSeconds: null
+      app.terminationGracePeriodSeconds: null
+    asserts:
+      - equal: {path: spec.template.spec.terminationGracePeriodSeconds, value: 60}
+      - equal: {path: "spec.template.spec.containers[0].lifecycle.preStop.exec.command", value: [sleep, "10"]}
+  - it: no wait-for-deps init container by default
+    template: templates/app-deployment.yaml
+    asserts:
+      - notExists: {path: spec.template.spec.initContainers}
+  - it: onlyoffice edition runs ONLYOFFICE with JWT and its config
+    template: templates/kodoffice.yaml
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      kodoffice.edition: onlyoffice
+    asserts:
+      - equal: {path: "spec.template.spec.containers[0].image", value: docker.io/onlyoffice/documentserver:9.4.0.1}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: JWT_ENABLED, value: "true"}
+      - equal: {path: "spec.template.spec.volumes[0].configMap.name", value: kodbox-kodoffice}
+  - it: kodoffice edition keeps JWT off
+    template: templates/kodoffice.yaml
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: JWT_ENABLED, value: "false"}
+  - it: backups follow the timezone and keep setting
+    template: templates/backup-cronjob.yaml
+    set:
+      backup.enabled: true
+      timezone: Asia/Shanghai
+    asserts:
+      - equal: {path: spec.timeZone, value: Asia/Shanghai}
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content: {name: KEEP, value: "14"}
+  - it: the database NetworkPolicy admits the backup job
+    template: templates/networkpolicy.yaml
+    documentSelector: {path: metadata.name, value: kodbox-db}
+    set:
+      backup.enabled: true
+    asserts:
+      - contains:
+          path: "spec.ingress[0].from"
+          content:
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: kodbox
+                app.kubernetes.io/instance: kodbox
+                app.kubernetes.io/component: backup

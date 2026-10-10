@@ -8,6 +8,7 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: backup
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
   schedule: {{ .Values.backup.schedule | quote }}
   {{- with .Values.timezone }}

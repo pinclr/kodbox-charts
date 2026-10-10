@@ -184,22 +184,30 @@ Every component (`app`, `db`, `redis`, `kodoffice`, `imaginary`,
 | `priorityClassName` | Pod priority |
 | `livenessProbe` / `readinessProbe` / `startupProbe` | Merged over the chart's probe, e.g. `{periodSeconds: 30, failureThreshold: 10}`; `enabled: false` removes it. A probe the chart doesn't define (e.g. etcd's `startupProbe`) needs its own handler |
 | `podSecurityContext` / `securityContext` | Pod and container security contexts |
+| `extraVolumes` / `extraVolumeMounts` | Extra volumes on the pod, mounted into the main container, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf |
+| `extraContainers` | Sidecar containers, e.g. Prometheus exporters (`mysqld_exporter`, `redis_exporter`) |
 
-`backup` takes the same settings except the probes.
+`backup` takes the same settings except the probes and the extras.
+
+Chart-wide:
+
+| Key | Purpose |
+|---|---|
+| `commonLabels` / `commonAnnotations` | Added to every resource (labels also to pods, never to selectors); a resource's own annotations win |
+| `global.storageClass` | Storage class for every volume without its own; `"-"` sets an empty `storageClassName` |
+| `revisionHistoryLimit` | Old ReplicaSets / StatefulSet revisions kept for rollbacks (default 10) |
+| `<component>.service.annotations` | Service annotations, e.g. for a cloud load balancer; the app and kodoffice Services also take `nodePort` and `loadBalancerSourceRanges` (Milvus: `loadBalancerSourceRanges`) |
 
 All resources are created in the release namespace (`helm -n`), written into
 each manifest; `namespaceOverride` puts them in another namespace (for umbrella
 charts).
 
-On first start the app waits in an init container until the database (and
-redis) accept connections; the image's entrypoint also waits and retries its
-installer. Disable the init container with `app.waitForDependencies=false`.
+On first start the image's entrypoint waits for the database (and redis) and
+retries its installer. `app.waitForDependencies=true` adds an init container
+that waits as well (off by default since 0.8.0).
 
-**App-only:** `app.extraVolumes` / `app.extraVolumeMounts` add extra volumes
-to the pod and mounts on the app container, e.g. a ConfigMap overriding
-`nginx.conf` or php-fpm's `www.conf` to enable their status pages for
-monitoring (neither the image nor this chart expose a narrower hook for
-that today).
+Since 0.8.0 every component takes `extraVolumes`, `extraVolumeMounts` and
+`extraContainers` (earlier only the app had volumes, and db/redis sidecars).
 
 **External Redis:** set `redis.enabled=false`, `externalRedis.host` and, for a
 password, `externalRedis.password` or `externalRedis.existingSecret`. Like the
@@ -594,6 +602,7 @@ Global values, shared with parent charts.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `global.imageRegistry` | string | `""` | Registry for every image (a mirror or pull-through cache); overrides each image's registry. |
+| `global.storageClass` | string | `""` | Storage class for every volume without its own; "-" disables dynamic provisioning. |
 
 ### timezone
 
@@ -602,6 +611,30 @@ IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `timezone` | string | `""` | IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.timezone. Empty keeps UTC. |
+
+### commonLabels
+
+Labels added to every resource and pod.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `commonLabels` | object | `{}` | Labels added to every resource and pod. |
+
+### commonAnnotations
+
+Annotations added to every resource.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `commonAnnotations` | object | `{}` | Annotations added to every resource. |
+
+### revisionHistoryLimit
+
+Old ReplicaSets / StatefulSet revisions kept for rollbacks.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `revisionHistoryLimit` | integer | `10` | Old ReplicaSets / StatefulSet revisions kept for rollbacks. |
 
 ### namespaceOverride
 
@@ -671,32 +704,36 @@ Kodbox application (nginx + php-fpm, port 80).
 | `app.strategy.rollingUpdate` | object |  | RollingUpdate parameters (maxSurge, maxUnavailable). |
 | `app.service.type` | "ClusterIP" \| "NodePort" \| "LoadBalancer" | `"ClusterIP"` | Service type. |
 | `app.service.port` | integer | `80` | Service port. |
+| `app.service.annotations` | object | `{}` | Service annotations, e.g. for a cloud load balancer. |
+| `app.service.nodePort` | integer / string | `""` | Fixed node port for type NodePort/LoadBalancer; empty lets Kubernetes assign one. |
+| `app.service.loadBalancerSourceRanges` | array | `[]` | Client CIDRs allowed to reach a LoadBalancer Service. |
 | `app.persistence.enabled` | boolean | `true` | Persist the kodbox site and user files on a PersistentVolumeClaim; false uses an emptyDir. |
 | `app.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
 | `app.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
 | `app.persistence.size` | string | `"8Gi"` | Volume size for the kodbox site and user files. |
 | `app.persistence.existingClaim` | string | `""` | Use an existing PersistentVolumeClaim instead of creating one. |
 | `app.persistence.annotations` | object | `{}` | Extra PVC annotations, e.g. for pvc-autoresizer. |
-| `app.waitForDependencies` | boolean | `true` | Wait for the database and redis to accept connections before starting kodbox. |
+| `app.waitForDependencies` | boolean | `false` | Wait in an init container for the database and redis before starting kodbox; off by default since the image waits itself. |
 | `app.preStopSleepSeconds` | integer | `10` | Seconds the pod keeps serving after termination starts, while it's removed from routing; 0 disables. |
 | `app.terminationGracePeriodSeconds` | integer | `60` | Time for the preStop sleep plus nginx/php-fpm to stop gracefully. |
 | `app.lifecycle` | object | `{}` | Container lifecycle hooks; replaces the default preStop sleep when set. |
 | `app.resources` | object | `{"requests": {"cpu": "250m", "memory": "512Mi"}, "limits"...` | Kubernetes resource requests and limits for the app. |
-| `app.extraVolumes` | array | `[]` | Extra volumes on the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf. |
-| `app.extraVolumeMounts` | array | `[]` | Extra volume mounts on the app container, pairing with app.extraVolumes. |
-| `app.nodeSelector` | object | `{}` | Node labels for scheduling the app. |
-| `app.tolerations` | array | `[]` | Tolerations for the app pods. |
-| `app.affinity` | object | `{}` | Affinity rules for the app pods. |
-| `app.podAnnotations` | object | `{}` | Extra annotations for the app pods. |
-| `app.podLabels` | object | `{}` | Extra labels for the app pods. |
-| `app.priorityClassName` | string | `""` | PriorityClass for the app pods. |
-| `app.topologySpreadConstraints` | array | `[]` | Topology spread constraints for the app pods; a missing labelSelector is filled with the pod's labels. |
-| `app.extraEnv` | array | `[]` | Extra environment variables for the the app container. |
-| `app.livenessProbe` | object | `{}` | Liveness probe override for the app, merged over the chart default; enabled: false removes it. |
-| `app.readinessProbe` | object | `{}` | Readiness probe override for the app, merged over the chart default; enabled: false removes it. |
-| `app.startupProbe` | object | `{}` | Startup probe override for the app, merged over the chart default; enabled: false removes it. |
-| `app.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for the app pods. |
-| `app.securityContext` | object | `{}` | Container security context for the app containers. |
+| `app.nodeSelector` | object | `{}` | Node labels for scheduling app. |
+| `app.tolerations` | array | `[]` | Tolerations for app pods. |
+| `app.affinity` | object | `{}` | Affinity rules for app pods. |
+| `app.podAnnotations` | object | `{}` | Extra annotations for app pods. |
+| `app.podLabels` | object | `{}` | Extra labels for app pods. |
+| `app.priorityClassName` | string | `""` | PriorityClass for app pods. |
+| `app.topologySpreadConstraints` | array | `[]` | Topology spread constraints for app pods; a missing labelSelector is filled with the pod's labels. |
+| `app.extraEnv` | array | `[]` | Extra environment variables for the app container. |
+| `app.livenessProbe` | object | `{}` | Liveness probe override for app, merged over the chart default; enabled: false removes it. |
+| `app.readinessProbe` | object | `{}` | Readiness probe override for app, merged over the chart default; enabled: false removes it. |
+| `app.startupProbe` | object | `{}` | Startup probe override for app, merged over the chart default; enabled: false removes it. |
+| `app.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for app pods. |
+| `app.securityContext` | object | `{}` | Container security context for app containers. |
+| `app.extraVolumes` | array | `[]` | Extra volumes on the app pod. |
+| `app.extraVolumeMounts` | array | `[]` | Extra volume mounts on the app container, pairing with extraVolumes. |
+| `app.extraContainers` | array | `[]` | Extra sidecar containers in the app pod, e.g. a Prometheus exporter. |
 
 ### admin
 
@@ -735,12 +772,12 @@ Bundled MariaDB. Set enabled=false and fill externalDatabase to use your own.
 | `db.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
 | `db.args` | array | `["--transaction-isolation=READ-COMMITTED"]` | Extra container arguments for MariaDB. |
 | `db.service.port` | integer | `3306` | Service port. |
+| `db.service.annotations` | object | `{}` | Service annotations, e.g. for a cloud load balancer. |
 | `db.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
 | `db.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
 | `db.persistence.size` | string | `"4Gi"` | Volume size for MariaDB data. |
 | `db.persistence.existingClaim` | string | `""` | Existing PVC instead of the StatefulSet's volume; new installs only. |
 | `db.resources` | object | `{"requests": {"cpu": "250m", "memory": "512Mi"}, "limits"...` | Kubernetes resource requests and limits for MariaDB. |
-| `db.extraContainers` | array | `[]` | Extra sidecar containers for MariaDB, e.g. mysqld_exporter. |
 | `db.nodeSelector` | object | `{}` | Node labels for scheduling MariaDB. |
 | `db.tolerations` | array | `[]` | Tolerations for MariaDB pods. |
 | `db.affinity` | object | `{}` | Affinity rules for MariaDB pods. |
@@ -754,6 +791,9 @@ Bundled MariaDB. Set enabled=false and fill externalDatabase to use your own.
 | `db.startupProbe` | object | `{}` | Startup probe override for MariaDB, merged over the chart default; enabled: false removes it. |
 | `db.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for MariaDB pods. |
 | `db.securityContext` | object | `{}` | Container security context for MariaDB containers. |
+| `db.extraVolumes` | array | `[]` | Extra volumes on the MariaDB pod. |
+| `db.extraVolumeMounts` | array | `[]` | Extra volume mounts on the MariaDB container, pairing with extraVolumes. |
+| `db.extraContainers` | array | `[]` | Extra sidecar containers in the MariaDB pod, e.g. a Prometheus exporter. |
 
 ### externalDatabase
 
@@ -816,13 +856,13 @@ Bundled Redis for kodbox sessions and cache.
 | `redis.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
 | `redis.args` | array | `["--appendonly", "yes", "--appendfsync", "everysec"]` | Extra container arguments for redis-server. |
 | `redis.service.port` | integer | `6379` | Service port. |
+| `redis.service.annotations` | object | `{}` | Service annotations, e.g. for a cloud load balancer. |
 | `redis.persistence.enabled` | boolean | `true` | Persist Redis append-only data on a PersistentVolumeClaim; false uses an emptyDir. |
 | `redis.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
 | `redis.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
 | `redis.persistence.size` | string | `"2Gi"` | Volume size for Redis append-only data. |
 | `redis.persistence.existingClaim` | string | `""` | Existing PVC instead of the StatefulSet's volume; new installs only. |
 | `redis.resources` | object | `{"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": ...` | Kubernetes resource requests and limits for Redis. |
-| `redis.extraContainers` | array | `[]` | Extra sidecar containers for Redis, e.g. redis_exporter. |
 | `redis.nodeSelector` | object | `{}` | Node labels for scheduling Redis. |
 | `redis.tolerations` | array | `[]` | Tolerations for Redis pods. |
 | `redis.affinity` | object | `{}` | Affinity rules for Redis pods. |
@@ -836,6 +876,9 @@ Bundled Redis for kodbox sessions and cache.
 | `redis.startupProbe` | object | `{}` | Startup probe override for Redis, merged over the chart default; enabled: false removes it. |
 | `redis.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}, "fsGroup":...` | Pod security context for Redis pods. |
 | `redis.securityContext` | object | `{}` | Container security context for Redis containers. |
+| `redis.extraVolumes` | array | `[]` | Extra volumes on the Redis pod. |
+| `redis.extraVolumeMounts` | array | `[]` | Extra volume mounts on the Redis container, pairing with extraVolumes. |
+| `redis.extraContainers` | array | `[]` | Extra sidecar containers in the Redis pod, e.g. a Prometheus exporter. |
 
 ### externalRedis
 
@@ -874,6 +917,9 @@ Document server (kodoffice or upstream ONLYOFFICE). Browsers load it directly, s
 | `kodoffice.jwt.existingSecretKey` | string | `"JWT_SECRET"` | Key of the JWT secret in existingSecret. |
 | `kodoffice.service.type` | "ClusterIP" \| "NodePort" \| "LoadBalancer" | `"ClusterIP"` | Service type. |
 | `kodoffice.service.port` | integer | `80` | Service port. |
+| `kodoffice.service.annotations` | object | `{}` | Service annotations, e.g. for a cloud load balancer. |
+| `kodoffice.service.nodePort` | integer / string | `""` | Fixed node port for type NodePort/LoadBalancer; empty lets Kubernetes assign one. |
+| `kodoffice.service.loadBalancerSourceRanges` | array | `[]` | Client CIDRs allowed to reach a LoadBalancer Service. |
 | `kodoffice.resources` | object | `{"requests": {"cpu": "500m", "memory": "1Gi"}, "limits": ...` | Kubernetes resource requests and limits for KodOffice. |
 | `kodoffice.nodeSelector` | object | `{}` | Node labels for scheduling KodOffice. |
 | `kodoffice.tolerations` | array | `[]` | Tolerations for KodOffice pods. |
@@ -888,6 +934,9 @@ Document server (kodoffice or upstream ONLYOFFICE). Browsers load it directly, s
 | `kodoffice.startupProbe` | object | `{}` | Startup probe override for KodOffice, merged over the chart default; enabled: false removes it. |
 | `kodoffice.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for KodOffice pods. |
 | `kodoffice.securityContext` | object | `{}` | Container security context for KodOffice containers. |
+| `kodoffice.extraVolumes` | array | `[]` | Extra volumes on the KodOffice pod. |
+| `kodoffice.extraVolumeMounts` | array | `[]` | Extra volume mounts on the KodOffice container, pairing with extraVolumes. |
+| `kodoffice.extraContainers` | array | `[]` | Extra sidecar containers in the KodOffice pod, e.g. a Prometheus exporter. |
 
 ### imaginary
 
@@ -904,6 +953,7 @@ Imaginary thumbnail / image processing service.
 | `imaginary.port` | integer | `9000` | Container port. |
 | `imaginary.args` | array | `["-enable-url-source", "-concurrency", "10", "-max-allowe...` | Extra container arguments for Imaginary. |
 | `imaginary.service.port` | integer | `9000` | Service port. |
+| `imaginary.service.annotations` | object | `{}` | Service annotations, e.g. for a cloud load balancer. |
 | `imaginary.resources` | object | `{"requests": {"cpu": "100m", "memory": "128Mi"}, "limits"...` | Kubernetes resource requests and limits for Imaginary. |
 | `imaginary.nodeSelector` | object | `{}` | Node labels for scheduling Imaginary. |
 | `imaginary.tolerations` | array | `[]` | Tolerations for Imaginary pods. |
@@ -918,6 +968,9 @@ Imaginary thumbnail / image processing service.
 | `imaginary.startupProbe` | object | `{}` | Startup probe override for Imaginary, merged over the chart default; enabled: false removes it. |
 | `imaginary.podSecurityContext` | object | `{"runAsNonRoot": true, "runAsUser": 65534, "runAsGroup": ...` | Pod security context for Imaginary pods. |
 | `imaginary.securityContext` | object | `{"allowPrivilegeEscalation": false, "capabilities": {"dro...` | Container security context for Imaginary containers. |
+| `imaginary.extraVolumes` | array | `[]` | Extra volumes on the Imaginary pod. |
+| `imaginary.extraVolumeMounts` | array | `[]` | Extra volume mounts on the Imaginary container, pairing with extraVolumes. |
+| `imaginary.extraContainers` | array | `[]` | Extra sidecar containers in the Imaginary pod, e.g. a Prometheus exporter. |
 
 ### milvus
 
@@ -949,6 +1002,9 @@ Milvus vector database stack (etcd + RustFS object storage + milvus standalone) 
 | `milvus.etcd.startupProbe` | object | `{}` | Startup probe override for etcd, merged over the chart default; enabled: false removes it. |
 | `milvus.etcd.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for etcd pods. |
 | `milvus.etcd.securityContext` | object | `{}` | Container security context for etcd containers. |
+| `milvus.etcd.extraVolumes` | array | `[]` | Extra volumes on the etcd pod. |
+| `milvus.etcd.extraVolumeMounts` | array | `[]` | Extra volume mounts on the etcd container, pairing with extraVolumes. |
+| `milvus.etcd.extraContainers` | array | `[]` | Extra sidecar containers in the etcd pod, e.g. a Prometheus exporter. |
 | `milvus.minio.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
 | `milvus.minio.image.repository` | string | `"rustfs/rustfs"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
 | `milvus.minio.image.tag` | string / number | `"1.0.1"` | Image tag. |
@@ -974,6 +1030,9 @@ Milvus vector database stack (etcd + RustFS object storage + milvus standalone) 
 | `milvus.minio.startupProbe` | object | `{}` | Startup probe override for RustFS, merged over the chart default; enabled: false removes it. |
 | `milvus.minio.podSecurityContext` | object | `{"runAsNonRoot": true, "runAsUser": 10001, "runAsGroup": ...` | Pod security context for RustFS pods. |
 | `milvus.minio.securityContext` | object | `{"allowPrivilegeEscalation": false, "capabilities": {"dro...` | Container security context for RustFS containers. |
+| `milvus.minio.extraVolumes` | array | `[]` | Extra volumes on the RustFS pod. |
+| `milvus.minio.extraVolumeMounts` | array | `[]` | Extra volume mounts on the RustFS container, pairing with extraVolumes. |
+| `milvus.minio.extraContainers` | array | `[]` | Extra sidecar containers in the RustFS pod, e.g. a Prometheus exporter. |
 | `milvus.standalone.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
 | `milvus.standalone.image.repository` | string | `"milvusdb/milvus"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
 | `milvus.standalone.image.tag` | string / number | `"v2.6.25"` | Image tag. |
@@ -983,6 +1042,8 @@ Milvus vector database stack (etcd + RustFS object storage + milvus standalone) 
 | `milvus.standalone.service.type` | "ClusterIP" \| "NodePort" \| "LoadBalancer" | `"ClusterIP"` | Service type. |
 | `milvus.standalone.service.port` | integer | `19530` | gRPC port. |
 | `milvus.standalone.service.metricsPort` | integer | `9091` | Metrics / health port. |
+| `milvus.standalone.service.annotations` | object | `{}` | Service annotations, e.g. for a cloud load balancer. |
+| `milvus.standalone.service.loadBalancerSourceRanges` | array | `[]` | Client CIDRs allowed to reach a LoadBalancer Service. |
 | `milvus.standalone.persistence.storageClass` | string | `""` | Storage class; empty uses the cluster default. |
 | `milvus.standalone.persistence.accessModes` | array | `["ReadWriteOnce"]` | PersistentVolumeClaim access modes. |
 | `milvus.standalone.persistence.size` | string | `"8Gi"` | Volume size for Milvus data. |
@@ -1000,6 +1061,9 @@ Milvus vector database stack (etcd + RustFS object storage + milvus standalone) 
 | `milvus.standalone.startupProbe` | object | `{}` | Startup probe override for Milvus, merged over the chart default; enabled: false removes it. |
 | `milvus.standalone.podSecurityContext` | object | `{"seccompProfile": {"type": "RuntimeDefault"}}` | Pod security context for Milvus pods. |
 | `milvus.standalone.securityContext` | object | `{}` | Container security context for Milvus containers. |
+| `milvus.standalone.extraVolumes` | array | `[]` | Extra volumes on the Milvus pod. |
+| `milvus.standalone.extraVolumeMounts` | array | `[]` | Extra volume mounts on the Milvus container, pairing with extraVolumes. |
+| `milvus.standalone.extraContainers` | array | `[]` | Extra sidecar containers in the Milvus pod, e.g. a Prometheus exporter. |
 
 ### networkPolicy
 

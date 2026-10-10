@@ -11,6 +11,10 @@
         "imageRegistry": {
           "type": "string",
           "description": "Registry for every image (a mirror or pull-through cache); overrides each image's registry."
+        },
+        "storageClass": {
+          "type": "string",
+          "description": "Storage class for every volume without its own; \"-\" disables dynamic provisioning."
         }
       }
     },
@@ -18,6 +22,19 @@
       "type": "string",
       "description": "IANA time zone for every component (e.g. Asia/Shanghai); sets TZ and PHP's date.timezone. Empty keeps UTC.",
       "pattern": "^([A-Za-z_]+(/[A-Za-z0-9_+-]+)*)?$"
+    },
+    "commonLabels": {
+      "type": "object",
+      "description": "Labels added to every resource and pod."
+    },
+    "commonAnnotations": {
+      "type": "object",
+      "description": "Annotations added to every resource."
+    },
+    "revisionHistoryLimit": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Old ReplicaSets / StatefulSet revisions kept for rollbacks."
     },
     "namespaceOverride": {
       "type": "string",
@@ -224,6 +241,21 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "Service port."
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Service annotations, e.g. for a cloud load balancer."
+            },
+            "nodePort": {
+              "type": [
+                "integer",
+                "string"
+              ],
+              "description": "Fixed node port for type NodePort/LoadBalancer; empty lets Kubernetes assign one."
+            },
+            "loadBalancerSourceRanges": {
+              "type": "array",
+              "description": "Client CIDRs allowed to reach a LoadBalancer Service."
             }
           },
           "additionalProperties": false
@@ -272,7 +304,7 @@
         },
         "waitForDependencies": {
           "type": "boolean",
-          "description": "Wait for the database and redis to accept connections before starting kodbox."
+          "description": "Wait in an init container for the database and redis before starting kodbox; off by default since the image waits itself."
         },
         "preStopSleepSeconds": {
           "type": "integer",
@@ -292,41 +324,33 @@
           "type": "object",
           "description": "Kubernetes resource requests and limits for the app."
         },
-        "extraVolumes": {
-          "type": "array",
-          "description": "Extra volumes on the app pod, e.g. a ConfigMap overriding nginx.conf or php-fpm's www.conf."
-        },
-        "extraVolumeMounts": {
-          "type": "array",
-          "description": "Extra volume mounts on the app container, pairing with app.extraVolumes."
-        },
         "nodeSelector": {
           "type": "object",
-          "description": "Node labels for scheduling the app."
+          "description": "Node labels for scheduling app."
         },
         "tolerations": {
           "type": "array",
-          "description": "Tolerations for the app pods."
+          "description": "Tolerations for app pods."
         },
         "affinity": {
           "type": "object",
-          "description": "Affinity rules for the app pods."
+          "description": "Affinity rules for app pods."
         },
         "podAnnotations": {
           "type": "object",
-          "description": "Extra annotations for the app pods."
+          "description": "Extra annotations for app pods."
         },
         "podLabels": {
           "type": "object",
-          "description": "Extra labels for the app pods."
+          "description": "Extra labels for app pods."
         },
         "priorityClassName": {
           "type": "string",
-          "description": "PriorityClass for the app pods."
+          "description": "PriorityClass for app pods."
         },
         "topologySpreadConstraints": {
           "type": "array",
-          "description": "Topology spread constraints for the app pods; a missing labelSelector is filled with the pod's labels."
+          "description": "Topology spread constraints for app pods; a missing labelSelector is filled with the pod's labels."
         },
         "extraEnv": {
           "type": "array",
@@ -341,27 +365,39 @@
               "name"
             ]
           },
-          "description": "Extra environment variables for the the app container."
+          "description": "Extra environment variables for the app container."
         },
         "livenessProbe": {
           "type": "object",
-          "description": "Liveness probe override for the app, merged over the chart default; enabled: false removes it."
+          "description": "Liveness probe override for app, merged over the chart default; enabled: false removes it."
         },
         "readinessProbe": {
           "type": "object",
-          "description": "Readiness probe override for the app, merged over the chart default; enabled: false removes it."
+          "description": "Readiness probe override for app, merged over the chart default; enabled: false removes it."
         },
         "startupProbe": {
           "type": "object",
-          "description": "Startup probe override for the app, merged over the chart default; enabled: false removes it."
+          "description": "Startup probe override for app, merged over the chart default; enabled: false removes it."
         },
         "podSecurityContext": {
           "type": "object",
-          "description": "Pod security context for the app pods."
+          "description": "Pod security context for app pods."
         },
         "securityContext": {
           "type": "object",
-          "description": "Container security context for the app containers."
+          "description": "Container security context for app containers."
+        },
+        "extraVolumes": {
+          "type": "array",
+          "description": "Extra volumes on the app pod."
+        },
+        "extraVolumeMounts": {
+          "type": "array",
+          "description": "Extra volume mounts on the app container, pairing with extraVolumes."
+        },
+        "extraContainers": {
+          "type": "array",
+          "description": "Extra sidecar containers in the app pod, e.g. a Prometheus exporter."
         }
       },
       "additionalProperties": false
@@ -490,6 +526,10 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "Service port."
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Service annotations, e.g. for a cloud load balancer."
             }
           },
           "additionalProperties": false
@@ -531,10 +571,6 @@
         "resources": {
           "type": "object",
           "description": "Kubernetes resource requests and limits for MariaDB."
-        },
-        "extraContainers": {
-          "type": "array",
-          "description": "Extra sidecar containers for MariaDB, e.g. mysqld_exporter."
         },
         "nodeSelector": {
           "type": "object",
@@ -598,6 +634,18 @@
         "securityContext": {
           "type": "object",
           "description": "Container security context for MariaDB containers."
+        },
+        "extraVolumes": {
+          "type": "array",
+          "description": "Extra volumes on the MariaDB pod."
+        },
+        "extraVolumeMounts": {
+          "type": "array",
+          "description": "Extra volume mounts on the MariaDB container, pairing with extraVolumes."
+        },
+        "extraContainers": {
+          "type": "array",
+          "description": "Extra sidecar containers in the MariaDB pod, e.g. a Prometheus exporter."
         }
       },
       "additionalProperties": false
@@ -866,6 +914,10 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "Service port."
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Service annotations, e.g. for a cloud load balancer."
             }
           },
           "additionalProperties": false
@@ -911,10 +963,6 @@
         "resources": {
           "type": "object",
           "description": "Kubernetes resource requests and limits for Redis."
-        },
-        "extraContainers": {
-          "type": "array",
-          "description": "Extra sidecar containers for Redis, e.g. redis_exporter."
         },
         "nodeSelector": {
           "type": "object",
@@ -978,6 +1026,18 @@
         "securityContext": {
           "type": "object",
           "description": "Container security context for Redis containers."
+        },
+        "extraVolumes": {
+          "type": "array",
+          "description": "Extra volumes on the Redis pod."
+        },
+        "extraVolumeMounts": {
+          "type": "array",
+          "description": "Extra volume mounts on the Redis container, pairing with extraVolumes."
+        },
+        "extraContainers": {
+          "type": "array",
+          "description": "Extra sidecar containers in the Redis pod, e.g. a Prometheus exporter."
         }
       },
       "additionalProperties": false
@@ -1165,6 +1225,21 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "Service port."
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Service annotations, e.g. for a cloud load balancer."
+            },
+            "nodePort": {
+              "type": [
+                "integer",
+                "string"
+              ],
+              "description": "Fixed node port for type NodePort/LoadBalancer; empty lets Kubernetes assign one."
+            },
+            "loadBalancerSourceRanges": {
+              "type": "array",
+              "description": "Client CIDRs allowed to reach a LoadBalancer Service."
             }
           },
           "additionalProperties": false
@@ -1235,6 +1310,18 @@
         "securityContext": {
           "type": "object",
           "description": "Container security context for KodOffice containers."
+        },
+        "extraVolumes": {
+          "type": "array",
+          "description": "Extra volumes on the KodOffice pod."
+        },
+        "extraVolumeMounts": {
+          "type": "array",
+          "description": "Extra volume mounts on the KodOffice container, pairing with extraVolumes."
+        },
+        "extraContainers": {
+          "type": "array",
+          "description": "Extra sidecar containers in the KodOffice pod, e.g. a Prometheus exporter."
         }
       },
       "additionalProperties": false
@@ -1308,6 +1395,10 @@
               "minimum": 1,
               "maximum": 65535,
               "description": "Service port."
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Service annotations, e.g. for a cloud load balancer."
             }
           },
           "additionalProperties": false
@@ -1378,6 +1469,18 @@
         "securityContext": {
           "type": "object",
           "description": "Container security context for Imaginary containers."
+        },
+        "extraVolumes": {
+          "type": "array",
+          "description": "Extra volumes on the Imaginary pod."
+        },
+        "extraVolumeMounts": {
+          "type": "array",
+          "description": "Extra volume mounts on the Imaginary container, pairing with extraVolumes."
+        },
+        "extraContainers": {
+          "type": "array",
+          "description": "Extra sidecar containers in the Imaginary pod, e.g. a Prometheus exporter."
         }
       },
       "additionalProperties": false
@@ -1540,6 +1643,18 @@
             "securityContext": {
               "type": "object",
               "description": "Container security context for etcd containers."
+            },
+            "extraVolumes": {
+              "type": "array",
+              "description": "Extra volumes on the etcd pod."
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "description": "Extra volume mounts on the etcd container, pairing with extraVolumes."
+            },
+            "extraContainers": {
+              "type": "array",
+              "description": "Extra sidecar containers in the etcd pod, e.g. a Prometheus exporter."
             }
           },
           "additionalProperties": false
@@ -1704,6 +1819,18 @@
             "securityContext": {
               "type": "object",
               "description": "Container security context for RustFS containers."
+            },
+            "extraVolumes": {
+              "type": "array",
+              "description": "Extra volumes on the RustFS pod."
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "description": "Extra volume mounts on the RustFS container, pairing with extraVolumes."
+            },
+            "extraContainers": {
+              "type": "array",
+              "description": "Extra sidecar containers in the RustFS pod, e.g. a Prometheus exporter."
             }
           },
           "additionalProperties": false
@@ -1785,6 +1912,14 @@
                   "minimum": 1,
                   "maximum": 65535,
                   "description": "Metrics / health port."
+                },
+                "annotations": {
+                  "type": "object",
+                  "description": "Service annotations, e.g. for a cloud load balancer."
+                },
+                "loadBalancerSourceRanges": {
+                  "type": "array",
+                  "description": "Client CIDRs allowed to reach a LoadBalancer Service."
                 }
               },
               "additionalProperties": false
@@ -1885,6 +2020,18 @@
             "securityContext": {
               "type": "object",
               "description": "Container security context for Milvus containers."
+            },
+            "extraVolumes": {
+              "type": "array",
+              "description": "Extra volumes on the Milvus pod."
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "description": "Extra volume mounts on the Milvus container, pairing with extraVolumes."
+            },
+            "extraContainers": {
+              "type": "array",
+              "description": "Extra sidecar containers in the Milvus pod, e.g. a Prometheus exporter."
             }
           },
           "additionalProperties": false

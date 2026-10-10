@@ -1,0 +1,81 @@
+suite: labels, annotations, namespace, storage, history
+templates:
+  - templates/app-service.yaml
+  - templates/app-deployment.yaml
+  - templates/app-configmap.yaml
+  - templates/secret.yaml
+  - templates/db.yaml
+  - templates/app-pvc.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+tests:
+  - it: adds commonLabels to resources and pods but not selectors
+    template: templates/app-deployment.yaml
+    set:
+      commonLabels: {team: storage}
+    asserts:
+      - equal: {path: metadata.labels.team, value: storage}
+      - equal: {path: spec.template.metadata.labels.team, value: storage}
+      - notExists: {path: spec.selector.matchLabels.team}
+  - it: adds commonAnnotations to resources
+    template: templates/app-service.yaml
+    set:
+      commonAnnotations: {owner: platform}
+    asserts:
+      - equal: {path: metadata.annotations.owner, value: platform}
+  - it: keeps a resource's own annotations over commonAnnotations
+    template: templates/secret.yaml
+    set:
+      commonAnnotations:
+        helm.sh/resource-policy: delete
+        owner: platform
+    asserts:
+      - equal: {path: "metadata.annotations[\"helm.sh/resource-policy\"]", value: keep}
+      - equal: {path: metadata.annotations.owner, value: platform}
+  - it: renders no annotations block when there are none
+    template: templates/app-service.yaml
+    asserts:
+      - notExists: {path: metadata.annotations}
+  - it: writes the release namespace, or namespaceOverride
+    template: templates/app-service.yaml
+    set:
+      namespaceOverride: other
+    asserts:
+      - equal: {path: metadata.namespace, value: other}
+  - it: uses global.storageClass when a volume has none
+    template: templates/db.yaml
+    documentSelector: {path: kind, value: StatefulSet}
+    set:
+      global.storageClass: fast
+    asserts:
+      - equal: {path: "spec.volumeClaimTemplates[0].spec.storageClassName", value: fast}
+  - it: prefers the component's storageClass
+    template: templates/app-pvc.yaml
+    set:
+      global.storageClass: fast
+      app.persistence.storageClass: cephfs
+    asserts:
+      - equal: {path: spec.storageClassName, value: cephfs}
+  - it: '"-" disables dynamic provisioning'
+    template: templates/app-pvc.yaml
+    set:
+      global.storageClass: "-"
+    asserts:
+      - equal: {path: spec.storageClassName, value: ""}
+  - it: omits storageClassName by default
+    template: templates/app-pvc.yaml
+    asserts:
+      - notExists: {path: spec.storageClassName}
+  - it: sets revisionHistoryLimit, defaulting to 10 when the key is missing
+    template: templates/app-deployment.yaml
+    set:
+      revisionHistoryLimit: null
+    asserts:
+      - equal: {path: spec.revisionHistoryLimit, value: 10}
+  - it: allows revisionHistoryLimit 0
+    template: templates/app-deployment.yaml
+    set:
+      revisionHistoryLimit: 0
+    asserts:
+      - equal: {path: spec.revisionHistoryLimit, value: 0}

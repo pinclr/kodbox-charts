@@ -11,14 +11,22 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: kodoffice
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" .Values.kodoffice.service.annotations) | nindent 2 }}
 spec:
   type: {{ .Values.kodoffice.service.type }}
+  {{- with .Values.kodoffice.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
   ports:
     - name: http
       port: {{ .Values.kodoffice.service.port }}
       targetPort: http
+      {{- if and (ne .Values.kodoffice.service.type "ClusterIP") .Values.kodoffice.service.nodePort }}
+      nodePort: {{ .Values.kodoffice.service.nodePort }}
+      {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -28,7 +36,9 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: kodoffice
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
+  revisionHistoryLimit: {{ include "kodbox.revisionHistoryLimit" . }}
   replicas: 1
   selector:
     matchLabels:
@@ -92,21 +102,34 @@ failureThreshold: 6` "override" .Values.kodoffice.livenessProbe) | nindent 10 }}
   port: http
 periodSeconds: 10
 timeoutSeconds: 5` "override" .Values.kodoffice.readinessProbe) | nindent 10 }}
-          {{- if $onlyoffice }}
+          {{- if or $onlyoffice .Values.kodoffice.extraVolumeMounts }}
           volumeMounts:
+            {{- if $onlyoffice }}
             - name: config
               mountPath: /etc/onlyoffice/documentserver/local-production-linux.json
               subPath: local-production-linux.json
               readOnly: true
+            {{- end }}
+            {{- with .Values.kodoffice.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           {{- with .Values.kodoffice.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- if $onlyoffice }}
+        {{- with (include "kodbox.extraContainers" (dict "v" .Values.kodoffice) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+      {{- if or $onlyoffice .Values.kodoffice.extraVolumes }}
       volumes:
+        {{- if $onlyoffice }}
         - name: config
           configMap:
             name: {{ include "kodbox.componentName" $sel }}
+        {{- end }}
+        {{- with .Values.kodoffice.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
 {{- end }}

@@ -7,11 +7,19 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: app
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" .Values.app.service.annotations) | nindent 2 }}
 spec:
   type: {{ .Values.app.service.type }}
+  {{- with .Values.app.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
   ports:
     - name: http
       port: {{ .Values.app.service.port }}
       targetPort: http
+      {{- if and (ne .Values.app.service.type "ClusterIP") .Values.app.service.nodePort }}
+      nodePort: {{ .Values.app.service.nodePort }}
+      {{- end }}

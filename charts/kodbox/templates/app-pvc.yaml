@@ -7,17 +7,11 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: app
-  annotations:
-    helm.sh/resource-policy: keep
-    {{- with .Values.app.persistence.annotations }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" (merge (dict "helm.sh/resource-policy" "keep") (.Values.app.persistence.annotations | default dict))) | nindent 2 }}
 spec:
   accessModes:
     {{- toYaml .Values.app.persistence.accessModes | nindent 4 }}
-  {{- with .Values.app.persistence.storageClass }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
+  {{- include "kodbox.storageClass" (dict "ctx" $ "sc" .Values.app.persistence.storageClass) | nindent 2 }}
   resources:
     requests:
       storage: {{ .Values.app.persistence.size }}

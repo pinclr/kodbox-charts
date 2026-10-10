@@ -6,10 +6,7 @@ metadata:
   namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" .Values.ingress.annotations) | nindent 2 }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . }}

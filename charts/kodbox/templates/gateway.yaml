@@ -15,10 +15,7 @@ metadata:
   namespace: {{ include "kodbox.namespace" $ }}
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
-  {{- with $gw.gatewayAnnotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" $gw.gatewayAnnotations) | nindent 2 }}
 spec:
   gatewayClassName: {{ $gw.className }}
   listeners:
@@ -55,10 +52,7 @@ metadata:
   labels:
     {{- include "kodbox.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ .component }}
-  {{- with $gw.routeAnnotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" $gw.routeAnnotations) | nindent 2 }}
 spec:
   parentRefs:
     {{- if $gw.create }}
@@ -93,6 +87,7 @@ metadata:
   labels:
     {{- include "kodbox.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ .component }}
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
   parentRefs:
     {{- if $gw.create }}

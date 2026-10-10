@@ -8,6 +8,7 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: db
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" .Values.db.service.annotations) | nindent 2 }}
 spec:
   selector:
     {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
@@ -24,7 +25,9 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: db
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
+  revisionHistoryLimit: {{ include "kodbox.revisionHistoryLimit" . }}
   serviceName: {{ include "kodbox.componentName" $sel }}
   replicas: 1
   selector:
@@ -82,6 +85,9 @@ timeoutSeconds: 5` "override" .Values.db.readinessProbe) | nindent 10 }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql
+            {{- with .Values.db.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- with .Values.db.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -89,11 +95,16 @@ timeoutSeconds: 5` "override" .Values.db.readinessProbe) | nindent 10 }}
         {{- with (include "kodbox.extraContainers" (dict "v" .Values.db) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
-      {{- with .Values.db.persistence.existingClaim }}
+      {{- if or .Values.db.persistence.existingClaim .Values.db.extraVolumes }}
       volumes:
+        {{- with .Values.db.persistence.existingClaim }}
         - name: data
           persistentVolumeClaim:
             claimName: {{ . }}
+        {{- end }}
+        {{- with .Values.db.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
   {{- if not .Values.db.persistence.existingClaim }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
@@ -106,9 +117,7 @@ timeoutSeconds: 5` "override" .Values.db.readinessProbe) | nindent 10 }}
       spec:
         accessModes:
           {{- toYaml .Values.db.persistence.accessModes | nindent 10 }}
-        {{- with .Values.db.persistence.storageClass }}
-        storageClassName: {{ . | quote }}
-        {{- end }}
+        {{- include "kodbox.storageClass" (dict "ctx" $ "sc" .Values.db.persistence.storageClass) | nindent 8 }}
         resources:
           requests:
             storage: {{ .Values.db.persistence.size }}

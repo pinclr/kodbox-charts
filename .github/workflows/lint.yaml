@@ -44,6 +44,15 @@ jobs:
           git diff --exit-code -- charts/*/values.schema.json charts/*/README.md \
             || { echo "::error::Run scripts/gen_values_schema.py and scripts/gen_values_doc.py and commit the result"; exit 1; }
 
+      # Template unit tests: charts/*/tests/*_test.yaml (helm-unittest).
+      - name: Run template unit tests
+        run: |
+          helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.2.1 \
+            || helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.2.1 --verify=false
+          for chart in charts/*/; do
+            helm unittest --strict "$chart"
+          done
+
       # Artifact Hub shows artifacthub.io/changes as the changelog; it must be a
       # list of {kind, description} with a known kind.
       - name: Check Artifact Hub changelog

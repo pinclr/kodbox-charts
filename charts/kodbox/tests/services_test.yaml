@@ -1,0 +1,39 @@
+suite: services
+templates:
+  - templates/app-service.yaml
+  - templates/kodoffice.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+tests:
+  - it: adds Service annotations
+    template: templates/app-service.yaml
+    set:
+      app.service.annotations: {service.beta.kubernetes.io/alibaba-cloud-loadbalancer-spec: slb.s1.small}
+    asserts:
+      - equal:
+          path: "metadata.annotations[\"service.beta.kubernetes.io/alibaba-cloud-loadbalancer-spec\"]"
+          value: slb.s1.small
+  - it: sets nodePort and source ranges for a LoadBalancer
+    template: templates/app-service.yaml
+    set:
+      app.service.type: LoadBalancer
+      app.service.nodePort: 30080
+      app.service.loadBalancerSourceRanges: [10.0.0.0/8]
+    asserts:
+      - equal: {path: "spec.ports[0].nodePort", value: 30080}
+      - equal: {path: spec.loadBalancerSourceRanges, value: [10.0.0.0/8]}
+  - it: ignores nodePort for ClusterIP
+    template: templates/app-service.yaml
+    set:
+      app.service.nodePort: 30080
+    asserts:
+      - notExists: {path: "spec.ports[0].nodePort"}
+  - it: applies to the document server Service too
+    template: templates/kodoffice.yaml
+    documentSelector: {path: kind, value: Service}
+    set:
+      kodoffice.service.type: NodePort
+      kodoffice.service.nodePort: 30081
+    asserts:
+      - equal: {path: "spec.ports[0].nodePort", value: 30081}

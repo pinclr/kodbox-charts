@@ -9,8 +9,13 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: milvus
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" $v.service.annotations) | nindent 2 }}
 spec:
   type: {{ $v.service.type }}
+  {{- with $v.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
   ports:
@@ -29,7 +34,9 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: milvus
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
+  revisionHistoryLimit: {{ include "kodbox.revisionHistoryLimit" . }}
   serviceName: {{ include "kodbox.componentName" $sel }}
   replicas: 1
   selector:
@@ -123,10 +130,16 @@ periodSeconds: 10` "override" $v.readinessProbe) | nindent 10 }}
               mountPath: /milvus/configs/user.yaml
               subPath: user.yaml
               readOnly: true
+            {{- with $v.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- with $v.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- with (include "kodbox.extraContainers" (dict "v" $v) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
       volumes:
         - name: config
           configMap:
@@ -134,6 +147,9 @@ periodSeconds: 10` "override" $v.readinessProbe) | nindent 10 }}
             items:
               - key: user.yaml
                 path: user.yaml
+        {{- with $v.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain
@@ -144,9 +160,7 @@ periodSeconds: 10` "override" $v.readinessProbe) | nindent 10 }}
       spec:
         accessModes:
           {{- toYaml $v.persistence.accessModes | nindent 10 }}
-        {{- with $v.persistence.storageClass }}
-        storageClassName: {{ . | quote }}
-        {{- end }}
+        {{- include "kodbox.storageClass" (dict "ctx" $ "sc" $v.persistence.storageClass) | nindent 8 }}
         resources:
           requests:
             storage: {{ $v.persistence.size }}

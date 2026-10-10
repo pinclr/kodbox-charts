@@ -9,6 +9,7 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: etcd
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
   selector:
     {{- include "kodbox.selectorLabels" $sel | nindent 4 }}
@@ -25,7 +26,9 @@ metadata:
   labels:
     {{- include "kodbox.labels" . | nindent 4 }}
     app.kubernetes.io/component: etcd
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" nil) | nindent 2 }}
 spec:
+  revisionHistoryLimit: {{ include "kodbox.revisionHistoryLimit" . }}
   serviceName: {{ include "kodbox.componentName" $sel }}
   replicas: 1
   selector:
@@ -77,10 +80,20 @@ timeoutSeconds: 20` "override" $v.readinessProbe) | nindent 10 }}
           volumeMounts:
             - name: data
               mountPath: /etcd
+            {{- with $v.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- with $v.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- with (include "kodbox.extraContainers" (dict "v" $v) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+      {{- with $v.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
   # Keep data volumes when the StatefulSet is deleted or scaled down.
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain
@@ -91,9 +104,7 @@ timeoutSeconds: 20` "override" $v.readinessProbe) | nindent 10 }}
       spec:
         accessModes:
           {{- toYaml $v.persistence.accessModes | nindent 10 }}
-        {{- with $v.persistence.storageClass }}
-        storageClassName: {{ . | quote }}
-        {{- end }}
+        {{- include "kodbox.storageClass" (dict "ctx" $ "sc" $v.persistence.storageClass) | nindent 8 }}
         resources:
           requests:
             storage: {{ $v.persistence.size }}
