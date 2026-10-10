@@ -56,6 +56,12 @@
       "enabled": false
     },
     {
+      "description": "Keep Python at 3.12 in CI: chart-testing's yamale crashes on 3.14 (ast.Num removed). Lift once chart-testing supports it.",
+      "matchManagers": ["github-actions"],
+      "matchDepNames": ["python"],
+      "allowedVersions": "<3.13"
+    },
+    {
       "description": "GitHub Actions: group minor/patch updates",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch"],
