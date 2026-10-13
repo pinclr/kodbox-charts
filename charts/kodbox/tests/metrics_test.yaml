@@ -84,7 +84,9 @@ tests:
       - documentSelector: {path: kind, value: Job}
         matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "CREATE USER IF NOT EXISTS '\\$\\{user\\}'@'127.0.0.1'"}
       - documentSelector: {path: kind, value: Job}
-        matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "GRANT PROCESS, REPLICATION CLIENT, SELECT ON performance_schema"}
+        matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "GRANT PROCESS, REPLICATION CLIENT ON \\*\\.\\*"}
+      - documentSelector: {path: kind, value: Job}
+        matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "GRANT SELECT ON performance_schema"}
       - documentSelector: {path: kind, value: Secret}
         equal: {path: "metadata.name", value: kodbox-db-metrics}
       - documentSelector: {path: kind, value: Secret}

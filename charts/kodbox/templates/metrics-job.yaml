@@ -81,7 +81,9 @@ spec:
             - |
               mariadb -h"{{ include "kodbox.dbHost" . }}" -uroot -p"${MYSQL_ROOT_PASSWORD}" -v <<EOSQL
               CREATE USER IF NOT EXISTS '${user}'@'127.0.0.1' IDENTIFIED BY '${password}';
-              GRANT PROCESS, REPLICATION CLIENT, SELECT ON performance_schema.* TO '${user}'@'127.0.0.1';
+              ALTER USER IF EXISTS '${user}'@'127.0.0.1' IDENTIFIED BY '${password}';
+              GRANT PROCESS, REPLICATION CLIENT ON *.* TO '${user}'@'127.0.0.1';
+              GRANT SELECT ON performance_schema.* TO '${user}'@'127.0.0.1';
               FLUSH PRIVILEGES;
               EOSQL
           envFrom:
