@@ -66,8 +66,38 @@ data:
     set_line /usr/local/etc/php-fpm.d/www.conf '^{{ $directive }} = ' '{{ $directive }} = {{ int $v }}'
     {{- end }}
     {{- end }}
+    {{- if include "kodbox.metricsEnabled" . }}
+    # php-fpm's status page on its own listener (served by a separate pool,
+    # so it answers while every worker is busy); kodbox-metrics.conf serves it.
+    set_line /usr/local/etc/php-fpm.d/www.conf '^;*pm.status_path = ' 'pm.status_path = /status'
+    set_line /usr/local/etc/php-fpm.d/www.conf '^;*pm.status_listen = ' 'pm.status_listen = 127.0.0.1:9001'
+    {{- end }}
 
     exec /entrypoint.sh "$@"
+  {{- if include "kodbox.metricsEnabled" . }}
+  # Included by the image's nginx.conf from sites-enabled. /fpm-metrics is
+  # scraped directly (PHP renders OpenMetrics); /nginx_status is for the
+  # exporter sidecar only.
+  kodbox-metrics.conf: |
+    server {
+        listen 9254;
+        access_log off;
+
+        location = /nginx_status {
+            stub_status;
+            allow 127.0.0.1;
+            deny all;
+        }
+
+        location = /fpm-metrics {
+            fastcgi_pass 127.0.0.1:9001;
+            fastcgi_param REQUEST_METHOD GET;
+            fastcgi_param SCRIPT_NAME /status;
+            fastcgi_param SCRIPT_FILENAME /status;
+            fastcgi_param QUERY_STRING openmetrics;
+        }
+    }
+  {{- end }}
   {{- with $rt.phpIni }}
   # Loaded after the image's docker-*.ini files.
   zz-php.ini: |

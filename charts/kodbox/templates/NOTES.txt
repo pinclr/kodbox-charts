@@ -31,6 +31,16 @@ WARNING: database backups are off. Set backup.enabled=true (README "Backups")
 or back up the database another way.
 {{- end }}
 
+{{- if eq (include "kodbox.metricsEnabled" .) "true" }}
+Metrics: php-fpm+nginx endpoints on the app pod{{- if .Values.db.enabled }}, a db exporter{{- end }}{{- if .Values.redis.enabled }}, a redis exporter{{- end }}{{ if .Values.milvus.enabled }} and milvus's own port 9091{{ end }}.
+{{- if .Values.metrics.podMonitor.enabled }}
+PodMonitors are created{{ with .Values.metrics.podMonitor.labels }} with labels {{ keys . | join "," }}{{ end }}.
+{{- else }}
+Scrape the pods directly (app 9254/fpm-metrics + 9113/metrics, db 9104, redis 9121),
+or set metrics.podMonitor.enabled=true plus labels your Prometheus selects.
+{{- end }}
+{{- end }}
+
 Database (for reference / backups):
   host:     {{ include "kodbox.dbHost" . }}:{{ include "kodbox.dbPort" . }}
   database: {{ .Values.database.name }}

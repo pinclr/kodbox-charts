@@ -1,0 +1,167 @@
+suite: prometheus metrics
+templates:
+  - templates/app-deployment.yaml
+  - templates/app-configmap.yaml
+  - templates/db.yaml
+  - templates/redis.yaml
+  - templates/metrics-job.yaml
+  - templates/podmonitor.yaml
+  - templates/networkpolicy.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+tests:
+  - it: exposes nothing by default
+    template: templates/app-deployment.yaml
+    asserts:
+      - notContains:
+          path: "spec.template.spec.containers"
+          content: {name: nginx-exporter}
+      - notContains:
+          path: "spec.template.spec.containers[0].ports"
+          content: {name: fpm-metrics}
+  - it: creates no metrics resources by default
+    template: templates/metrics-job.yaml
+    asserts:
+      - hasDocuments: {count: 0}
+  - it: creates no PodMonitors by default
+    template: templates/podmonitor.yaml
+    asserts:
+      - hasDocuments: {count: 0}
+  - it: keeps start.sh and the configmap free of status config by default
+    template: templates/app-configmap.yaml
+    asserts:
+      - notMatchRegex: {path: 'data["start.sh"]', pattern: "pm.status"}
+      - notExists: {path: 'data["kodbox-metrics.conf"]'}
+  - it: creates nothing when the metrics key is missing (--reuse-values)
+    template: templates/metrics-job.yaml
+    set:
+      metrics: null
+    asserts:
+      - hasDocuments: {count: 0}
+  - it: wires the php-fpm status page and the nginx exporter into the app
+    template: templates/app-deployment.yaml
+    set:
+      metrics.enabled: true
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].ports"
+          content: {name: fpm-metrics, containerPort: 9254}
+      - contains:
+          path: "spec.template.spec.containers[0].volumeMounts"
+          content: {name: healthz, mountPath: /etc/nginx/sites-enabled/kodbox-metrics.conf, subPath: kodbox-metrics.conf, readOnly: true}
+      - equal: {path: "spec.template.spec.containers[1].name", value: nginx-exporter}
+      - equal: {path: "spec.template.spec.containers[1].image", value: docker.io/nginx/nginx-prometheus-exporter:1.5.3}
+      - equal: {path: "spec.template.spec.containers[1].args[0]", value: --nginx.scrape-uri=http://127.0.0.1:9254/nginx_status}
+  - it: enables the fpm status listener in start.sh and serves it over port 9254
+    template: templates/app-configmap.yaml
+    set:
+      metrics.enabled: true
+    asserts:
+      - matchRegex: {path: 'data["start.sh"]', pattern: "'pm.status_listen = 127.0.0.1:9001'"}
+      - matchRegex: {path: 'data["kodbox-metrics.conf"]', pattern: "listen 9254;"}
+      - matchRegex: {path: 'data["kodbox-metrics.conf"]', pattern: "fastcgi_param QUERY_STRING openmetrics;"}
+  - it: adds the mysqld exporter with db enabled
+    template: templates/db.yaml
+    documentSelector: {path: kind, value: StatefulSet}
+    set:
+      metrics.enabled: true
+    asserts:
+      - equal: {path: "spec.template.spec.containers[1].name", value: mysqld-exporter}
+      - equal: {path: "spec.template.spec.containers[1].image", value: docker.io/prom/mysqld-exporter:v0.20.0}
+      - equal: {path: "spec.template.spec.containers[1].args[0]", value: --mysqld.address=127.0.0.1:3306}
+      - equal: {path: "spec.template.spec.containers[1].args[1]", value: --mysqld.username=kodbox_exporter}
+  - it: creates the exporter account Secret, RBAC and hook Job
+    template: templates/metrics-job.yaml
+    set:
+      metrics.enabled: true
+    asserts:
+      - hasDocuments: {count: 4}
+      - documentSelector: {path: kind, value: Role}
+        equal: {path: "metadata.name", value: kodbox-db-metrics}
+      - documentSelector: {path: kind, value: RoleBinding}
+        equal: {path: "metadata.name", value: kodbox-db-metrics}
+      - documentSelector: {path: kind, value: Job}
+        matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "CREATE USER IF NOT EXISTS '\\$\\{user\\}'@'127.0.0.1'"}
+      - documentSelector: {path: kind, value: Job}
+        matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "GRANT PROCESS, REPLICATION CLIENT, SELECT ON performance_schema"}
+      - documentSelector: {path: kind, value: Secret}
+        equal: {path: "metadata.name", value: kodbox-db-metrics}
+      - documentSelector: {path: kind, value: Secret}
+        equal: {path: "stringData.user", value: kodbox_exporter}
+      - documentSelector: {path: kind, value: Job}
+        equal: {path: "metadata.name", value: kodbox-db-metrics}
+      - documentSelector: {path: kind, value: Job}
+        equal: {path: "spec.template.spec.containers[0].envFrom[1].secretRef.name", value: kodbox-db-metrics}
+  - it: skips the account resources without the bundled database
+    template: templates/metrics-job.yaml
+    set:
+      metrics.enabled: true
+      db.enabled: false
+      externalDatabase.host: mariadb.example.com
+    asserts:
+      - hasDocuments: {count: 0}
+  - it: adds the redis exporter
+    template: templates/redis.yaml
+    documentSelector: {path: kind, value: StatefulSet}
+    set:
+      metrics.enabled: true
+    asserts:
+      - equal: {path: "spec.template.spec.containers[1].name", value: redis-exporter}
+      - equal: {path: "spec.template.spec.containers[1].image", value: docker.io/oliver006/redis_exporter:v1.92.1}
+  - it: creates PodMonitors per component with the configured interval and labels
+    template: templates/podmonitor.yaml
+    set:
+      metrics.enabled: true
+      metrics.podMonitor.enabled: true
+      metrics.podMonitor.labels: {release: kube-prometheus-stack}
+    asserts:
+      - hasDocuments: {count: 3}
+      - documentSelector: {path: metadata.name, value: kodbox-app}
+        equal: {path: "metadata.labels.release", value: kube-prometheus-stack}
+      - documentSelector: {path: metadata.name, value: kodbox-app}
+        equal: {path: "spec.podMetricsEndpoints[0].path", value: /fpm-metrics}
+      - documentSelector: {path: metadata.name, value: kodbox-app}
+        equal: {path: "spec.podMetricsEndpoints[0].interval", value: 30s}
+      - documentSelector: {path: metadata.name, value: kodbox-db}
+        notExists: {path: "spec.podMetricsEndpoints[0].path"}
+  - it: includes milvus when enabled
+    template: templates/podmonitor.yaml
+    set:
+      metrics.enabled: true
+      metrics.podMonitor.enabled: true
+      milvus.enabled: true
+    asserts:
+      - hasDocuments: {count: 4}
+      - documentSelector: {path: metadata.name, value: kodbox-milvus}
+        isKind: {of: PodMonitor}
+      - documentSelector: {path: metadata.name, value: kodbox-milvus}
+        equal: {path: "spec.podMetricsEndpoints[0].port", value: metrics}
+  - it: opens only the exporter ports to metricsFrom
+    template: templates/networkpolicy.yaml
+    set:
+      metrics.enabled: true
+      networkPolicy:
+        metricsFrom:
+          - namespaceSelector:
+              matchLabels: {team: monitoring}
+    asserts:
+      - documentSelector: {path: metadata.name, value: kodbox-db}
+        notContains:
+          path: "spec.ingress[0].ports"
+          content: {port: 9104, protocol: TCP}
+      - documentSelector: {path: metadata.name, value: kodbox-db}
+        equal: {path: "spec.ingress[1].ports[0].port", value: 9104}
+      - documentSelector: {path: metadata.name, value: kodbox-db}
+        equal: {path: "spec.ingress[1].from[0].namespaceSelector.matchLabels.team", value: monitoring}
+      - documentSelector: {path: metadata.name, value: kodbox-redis}
+        equal: {path: "spec.ingress[1].ports[0].port", value: 9121}
+  - it: keeps policies untouched when metrics are off
+    template: templates/networkpolicy.yaml
+    asserts:
+      - documentSelector: {path: metadata.name, value: kodbox-db}
+        notContains:
+          path: "spec.ingress[0].ports"
+          content: {port: 9104, protocol: TCP}
+      - documentSelector: {path: metadata.name, value: kodbox-redis}
+        notExists: {path: "spec.ingress[1]"}

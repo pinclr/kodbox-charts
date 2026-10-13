@@ -92,6 +92,9 @@ timeoutSeconds: 5` "override" .Values.db.readinessProbe) | nindent 10 }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- if include "kodbox.metricsEnabled" . }}
+        {{- include "kodbox.exporterContainer" (dict "ctx" . "name" "mysqld-exporter" "exporter" .Values.metrics.mysqldExporter "port" 9104 "portName" "metrics" "args" (list "--mysqld.address=127.0.0.1:3306" (printf "--mysqld.username=%s" .Values.metrics.mysqldExporter.username)) "env" (list (dict "name" "MYSQLD_EXPORTER_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "key" "password" "name" (include "kodbox.componentName" (dict "ctx" . "component" "db") | printf "%s-metrics")))))) | nindent 8 }}
+        {{- end }}
         {{- with (include "kodbox.extraContainers" (dict "v" .Values.db) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}

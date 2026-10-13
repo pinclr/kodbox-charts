@@ -2122,6 +2122,212 @@
         "milvusExtraFrom": {
           "type": "array",
           "description": "Extra NetworkPolicy 'from' peers allowed to reach Milvus."
+        },
+        "metricsFrom": {
+          "type": "array",
+          "description": "With metrics enabled, NetworkPolicy 'from' peers allowed to scrape the db, redis and Milvus metrics ports."
+        }
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Prometheus metrics: exporter sidecars and PodMonitors (README 'Metrics').",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Expose metrics endpoints and sidecars."
+        },
+        "podMonitor": {
+          "type": "object",
+          "description": "PodMonitor per component (needs the Prometheus Operator).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create PodMonitors."
+            },
+            "interval": {
+              "type": "string",
+              "description": "Scrape interval."
+            },
+            "scrapeTimeout": {
+              "type": "string",
+              "description": "Scrape timeout; empty uses the operator's default."
+            },
+            "labels": {
+              "type": "object",
+              "description": "Labels for the PodMonitors, so the Prometheus selector matches."
+            }
+          },
+          "additionalProperties": false
+        },
+        "nginxExporter": {
+          "type": "object",
+          "description": "nginx exporter sidecar on the app pod.",
+          "properties": {
+            "image": {
+              "type": "object",
+              "description": "Container image for the nginx exporter.",
+              "properties": {
+                "registry": {
+                  "type": "string",
+                  "description": "Image registry; global.imageRegistry overrides it."
+                },
+                "repository": {
+                  "type": "string",
+                  "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Image tag."
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+                  "pattern": "^(sha256:[a-f0-9]{64})?$"
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ],
+                  "description": "Image pull policy."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "repository"
+              ]
+            },
+            "resources": {
+              "type": "object",
+              "description": "Kubernetes resource requests and limits for the nginx exporter."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "image"
+          ]
+        },
+        "mysqldExporter": {
+          "type": "object",
+          "description": "mysqld_exporter sidecar on the db pod.",
+          "properties": {
+            "image": {
+              "type": "object",
+              "description": "Container image for mysqld_exporter.",
+              "properties": {
+                "registry": {
+                  "type": "string",
+                  "description": "Image registry; global.imageRegistry overrides it."
+                },
+                "repository": {
+                  "type": "string",
+                  "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Image tag."
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+                  "pattern": "^(sha256:[a-f0-9]{64})?$"
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ],
+                  "description": "Image pull policy."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "repository"
+              ]
+            },
+            "username": {
+              "type": "string",
+              "description": "MariaDB account the exporter logs in as (max 16 characters); the chart's hook Job creates it.",
+              "maxLength": 16
+            },
+            "resources": {
+              "type": "object",
+              "description": "Kubernetes resource requests and limits for mysqld_exporter."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "image"
+          ]
+        },
+        "redisExporter": {
+          "type": "object",
+          "description": "redis_exporter sidecar on the redis pod.",
+          "properties": {
+            "image": {
+              "type": "object",
+              "description": "Container image for redis_exporter.",
+              "properties": {
+                "registry": {
+                  "type": "string",
+                  "description": "Image registry; global.imageRegistry overrides it."
+                },
+                "repository": {
+                  "type": "string",
+                  "description": "Image repository, without the registry (one that starts with a registry host is used as-is)."
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Image tag."
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "Image digest (sha256:...) to pin a build; used together with the tag.",
+                  "pattern": "^(sha256:[a-f0-9]{64})?$"
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ],
+                  "description": "Image pull policy."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "repository"
+              ]
+            },
+            "resources": {
+              "type": "object",
+              "description": "Kubernetes resource requests and limits for redis_exporter."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "image"
+          ]
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Security context for the exporter sidecars and the metrics account Job."
         }
       },
       "additionalProperties": false

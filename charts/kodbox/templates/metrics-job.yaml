@@ -1,0 +1,102 @@
+{{- if and (eq (include "kodbox.metricsEnabled" .) "true") .Values.db.enabled }}
+{{- $name := include "kodbox.componentName" (dict "ctx" . "component" "db") | printf "%s-metrics" }}
+{{- $existing := (lookup "v1" "Secret" (include "kodbox.namespace" .) $name).data | default dict }}
+# The exporter's own MariaDB account. Held in a Secret like the release's
+# other generated passwords: created once, kept across upgrades and on
+# uninstall ("helm.sh/resource-policy" "keep", like the database Secret).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "kodbox.namespace" $ }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" (dict "helm.sh/resource-policy" "keep")) | nindent 2 }}
+type: Opaque
+stringData:
+  user: {{ .Values.metrics.mysqldExporter.username | quote }}
+  password: {{ (get $existing "password" | b64dec | default (randAlphaNum 24)) | quote }}
+---
+# Lets the hook Job correct the password if the Secret was edited or deleted.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "kodbox.namespace" $ }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ $name | quote }}]
+    verbs: ["update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "kodbox.namespace" $ }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kodbox.serviceAccountName" . }}
+---
+# The MariaDB image's init script creates accounts only on an empty data
+# volume, so this hook Job creates the exporter account after each install
+# and upgrade instead. "user" and "password" come from the Secret (envFrom).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "kodbox.namespace" $ }}
+  labels:
+    {{- include "kodbox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+  {{- include "kodbox.annotations" (dict "ctx" $ "extra" (dict "helm.sh/hook" "post-install,post-upgrade" "helm.sh/hook-delete-policy" "before-hook-creation")) | nindent 2 }}
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "kodbox.labels" . | nindent 8 }}
+        app.kubernetes.io/component: db
+    spec:
+      serviceAccountName: {{ include "kodbox.serviceAccountName" . }}
+      restartPolicy: Never
+      containers:
+        - name: create-account
+          image: {{ include "kodbox.image" (dict "ctx" . "image" .Values.db.image) }}
+          imagePullPolicy: {{ .Values.db.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              mariadb -h"{{ include "kodbox.dbHost" . }}" -uroot -p"${MYSQL_ROOT_PASSWORD}" -v <<EOSQL
+              CREATE USER IF NOT EXISTS '${user}'@'127.0.0.1' IDENTIFIED BY '${password}';
+              GRANT PROCESS, REPLICATION CLIENT, SELECT ON performance_schema.* TO '${user}'@'127.0.0.1';
+              FLUSH PRIVILEGES;
+              EOSQL
+          envFrom:
+            - secretRef:
+                name: {{ include "kodbox.dbSecretName" . }}
+            - secretRef:
+                name: {{ $name }}
+          {{- with .Values.metrics.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+{{- end }}
