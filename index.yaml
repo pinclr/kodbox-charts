@@ -4,6 +4,50 @@ entries:
   - annotations:
       artifacthub.io/category: storage
       artifacthub.io/changes: |
+        - kind: changed
+          description: nginx workers follow the container's CPU limit instead of the node's CPU count (app.nginx.workerProcesses)
+        - kind: changed
+          description: php-fpm pool sized for a pod, 20 workers at most instead of 505 (app.phpFpm)
+        - kind: fixed
+          description: PHP errors go to the container log instead of HTTP responses (app.phpIni, display_errors=stderr)
+        - kind: added
+          description: app.nginx.clientMaxBodySize and app.phpIni for nginx and php.ini limits
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/pinclr/kodbox-charts
+        - name: kodbox
+          url: https://kodcloud.com
+      artifacthub.io/signKey: |
+        fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
+        url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
+    apiVersion: v2
+    appVersion: 1.68.10
+    created: "2026-10-13T04:48:46.816688232Z"
+    description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
+    digest: 0f4a548779c7453ab29f95896fb40566c1c4c6888cfea5b06ec989d3d468085a
+    home: https://github.com/pinclr/kodbox-charts
+    icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
+    keywords:
+    - kodbox
+    - file-manager
+    - cloud-storage
+    - office
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: pinclr
+      url: https://github.com/pinclr
+    name: kodbox
+    sources:
+    - https://github.com/pinclr/kodbox-charts
+    - https://github.com/kalcaddle/kodbox
+    type: application
+    urls:
+    - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.9.0/kodbox-0.9.0.tgz
+    version: 0.9.0
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |
         - kind: added
           description: README documents the per-request upload limits and chunked uploads
       artifacthub.io/license: Apache-2.0
@@ -828,4 +872,4 @@ entries:
     urls:
     - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.0/kodbox-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-13T03:54:30.007813804Z"
+generated: "2026-10-13T04:48:46.816787007Z"
