@@ -320,6 +320,78 @@
           "type": "object",
           "description": "Container lifecycle hooks; replaces the default preStop sleep when set."
         },
+        "nginx": {
+          "type": "object",
+          "description": "nginx sizing, applied to the image's nginx.conf on start (skipped when it's mounted read-only).",
+          "properties": {
+            "workerProcesses": {
+              "type": [
+                "integer",
+                "string"
+              ],
+              "minimum": 1,
+              "pattern": "^(auto)?$",
+              "description": "nginx workers: an integer or \"auto\" (one per node CPU); empty uses the container's CPU limit, or 2 without one."
+            },
+            "clientMaxBodySize": {
+              "type": "string",
+              "description": "nginx request body limit, e.g. 2048M; empty keeps the image's 1024M.",
+              "pattern": "^([0-9]+[kKmMgG]?)?$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "phpFpm": {
+          "type": "object",
+          "description": "php-fpm pool sizing (pm = dynamic), applied to the image's www.conf on start (skipped when it's mounted read-only). Set all four, or all to null to keep the image's pool.",
+          "properties": {
+            "maxChildren": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Most workers at once; each can use up to PHP's memory_limit."
+            },
+            "startServers": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Workers started with php-fpm."
+            },
+            "minSpareServers": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Fewest idle workers kept."
+            },
+            "maxSpareServers": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Most idle workers kept."
+            }
+          },
+          "additionalProperties": false
+        },
+        "phpIni": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "description": "php.ini settings loaded after the image's; written as-is. The default display_errors=stderr keeps PHP errors out of responses."
+        },
         "resources": {
           "type": "object",
           "description": "Kubernetes resource requests and limits for the app."

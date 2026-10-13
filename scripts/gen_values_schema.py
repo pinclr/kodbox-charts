@@ -175,6 +175,17 @@ schema = {
             "preStopSleepSeconds": {"type": "integer", "minimum": 0, "description": "Seconds the pod keeps serving after termination starts, while it's removed from routing; 0 disables."},
             "terminationGracePeriodSeconds": {"type": "integer", "minimum": 1, "description": "Time for the preStop sleep plus nginx/php-fpm to stop gracefully."},
             "lifecycle": free("Container lifecycle hooks; replaces the default preStop sleep when set."),
+            "nginx": obj("nginx sizing, applied to the image's nginx.conf on start (skipped when it's mounted read-only).", {
+                "workerProcesses": {"type": ["integer", "string"], "minimum": 1, "pattern": "^(auto)?$", "description": "nginx workers: an integer or \"auto\" (one per node CPU); empty uses the container's CPU limit, or 2 without one."},
+                "clientMaxBodySize": s("nginx request body limit, e.g. 2048M; empty keeps the image's 1024M.", pattern="^([0-9]+[kKmMgG]?)?$"),
+            }),
+            "phpFpm": obj("php-fpm pool sizing (pm = dynamic), applied to the image's www.conf on start (skipped when it's mounted read-only). Set all four, or all to null to keep the image's pool.", {
+                "maxChildren": {"type": ["integer", "null"], "minimum": 1, "description": "Most workers at once; each can use up to PHP's memory_limit."},
+                "startServers": {"type": ["integer", "null"], "minimum": 1, "description": "Workers started with php-fpm."},
+                "minSpareServers": {"type": ["integer", "null"], "minimum": 1, "description": "Fewest idle workers kept."},
+                "maxSpareServers": {"type": ["integer", "null"], "minimum": 1, "description": "Most idle workers kept."},
+            }),
+            "phpIni": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}, "description": "php.ini settings loaded after the image's; written as-is. The default display_errors=stderr keeps PHP errors out of responses."},
             "resources": resources("the app"),
             **sched("app"),
             **extras("app"),

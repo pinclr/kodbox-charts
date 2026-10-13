@@ -58,6 +58,12 @@ app:
     limits:
       cpu: "4"
       memory: 8Gi
+  # Sized for the 8Gi limit above; nginx follows the 4-CPU limit by default.
+  phpFpm:
+    maxChildren: 40
+    startServers: 8
+    minSpareServers: 4
+    maxSpareServers: 16
 
 admin:
   # Pre-created secret with KODBOX_ADMIN_USER and KODBOX_ADMIN_PASSWORD, so the

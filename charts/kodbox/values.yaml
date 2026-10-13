@@ -126,6 +126,35 @@ app:
   #    subPath: nginx.conf
   #    readOnly: true
 
+  # nginx and php-fpm sizing, applied to the image's config files on start.
+  # The image's own defaults suit a dedicated server, not a pod: nginx starts
+  # one worker per node CPU and php-fpm keeps 100+ idle workers. A file
+  # replaced through extraVolumeMounts is left as mounted.
+  nginx:
+    # Integer or "auto" (one per node CPU). Empty: the container's CPU limit,
+    # rounded up, or 2 without a limit.
+    workerProcesses: ""
+    # Request body limit, e.g. 2048M. Empty keeps the image's 1024M. Uploads
+    # in the kodbox web UI are chunked, so this limits a chunk, not a file.
+    clientMaxBodySize: ""
+  # php-fpm pool (pm = dynamic). Each busy worker can use up to PHP's
+  # memory_limit (512M in the image), so keep maxChildren in line with the
+  # memory limit. null keeps the image's value.
+  phpFpm:
+    maxChildren: 20
+    startServers: 4
+    minSpareServers: 2
+    maxSpareServers: 8
+  # php.ini settings, loaded after the image's own. The image's
+  # display_errors=STDOUT shows PHP errors in responses; stderr sends them to
+  # the container log instead. Values are written as-is, so quote strings
+  # with special characters. Set a key to null to drop it.
+  phpIni:
+    display_errors: stderr
+  #  upload_max_filesize: 2048M
+  #  post_max_size: 2048M
+  #  memory_limit: 512M
+
   resources:
     requests:
       cpu: 250m

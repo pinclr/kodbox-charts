@@ -1,0 +1,84 @@
+suite: nginx, php-fpm and php.ini sizing
+templates:
+  - templates/app-deployment.yaml
+  - templates/app-configmap.yaml
+release:
+  name: kodbox
+  namespace: kodbox
+tests:
+  - it: starts through start.sh with the image's default command
+    template: templates/app-deployment.yaml
+    asserts:
+      - equal: {path: "spec.template.spec.containers[0].command", value: [/bin/sh, /kodbox-chart/start.sh]}
+      - equal: {path: "spec.template.spec.containers[0].args", value: [supervisord, -n, -c, /etc/supervisord.conf]}
+      - contains:
+          path: "spec.template.spec.containers[0].volumeMounts"
+          content: {name: healthz, mountPath: /kodbox-chart/start.sh, subPath: start.sh, readOnly: true}
+      - contains:
+          path: "spec.template.spec.containers[0].volumeMounts"
+          content: {name: healthz, mountPath: /usr/local/etc/php/conf.d/zz-php.ini, subPath: zz-php.ini, readOnly: true}
+  - it: sizes nginx from the CPU limit and php-fpm for a pod by default
+    template: templates/app-configmap.yaml
+    asserts:
+      - matchRegex: {path: 'data["start.sh"]', pattern: "/sys/fs/cgroup/cpu.max"}
+      - matchRegex: {path: 'data["start.sh"]', pattern: "'\\^worker_processes ' \"worker_processes \\$workers;\""}
+      - matchRegex: {path: 'data["start.sh"]', pattern: "'pm.max_children = 20'"}
+      - matchRegex: {path: 'data["start.sh"]', pattern: "'pm.start_servers = 4'"}
+      - matchRegex: {path: 'data["start.sh"]', pattern: "'pm.min_spare_servers = 2'"}
+      - matchRegex: {path: 'data["start.sh"]', pattern: "'pm.max_spare_servers = 8'"}
+      - notMatchRegex: {path: 'data["start.sh"]', pattern: client_max_body_size}
+      - equal: {path: 'data["zz-php.ini"]', value: "display_errors = stderr\n"}
+  - it: applies explicit nginx and php.ini settings
+    template: templates/app-configmap.yaml
+    set:
+      app.nginx.workerProcesses: 4
+      app.nginx.clientMaxBodySize: 2048M
+      app.phpIni.upload_max_filesize: 2048M
+      app.phpIni.max_input_vars: 1048576
+    asserts:
+      - matchRegex: {path: 'data["start.sh"]', pattern: "(?m)^workers=4$"}
+      - notMatchRegex: {path: 'data["start.sh"]', pattern: cgroup}
+      - matchRegex: {path: 'data["start.sh"]', pattern: "'    client_max_body_size 2048M;'"}
+      - equal:
+          path: 'data["zz-php.ini"]'
+          value: "display_errors = stderr\nmax_input_vars = 1048576\nupload_max_filesize = 2048M\n"
+  - it: keeps the image's pool and php.ini when nulled
+    template: templates/app-deployment.yaml
+    set:
+      app.phpFpm: {maxChildren: null, startServers: null, minSpareServers: null, maxSpareServers: null}
+      app.phpIni.display_errors: null
+    asserts:
+      - notContains:
+          path: "spec.template.spec.containers[0].volumeMounts"
+          content: {name: healthz, mountPath: /usr/local/etc/php/conf.d/zz-php.ini, subPath: zz-php.ini, readOnly: true}
+  - it: writes no pool settings when nulled
+    template: templates/app-configmap.yaml
+    set:
+      app.phpFpm: {maxChildren: null, startServers: null, minSpareServers: null, maxSpareServers: null}
+      app.phpIni.display_errors: null
+    asserts:
+      - notMatchRegex: {path: 'data["start.sh"]', pattern: "pm\\."}
+      - notExists: {path: 'data["zz-php.ini"]'}
+  - it: falls back to the defaults when the keys are missing (--reuse-values)
+    template: templates/app-configmap.yaml
+    set:
+      app.nginx: null
+      app.phpFpm: null
+      app.phpIni: null
+    asserts:
+      - matchRegex: {path: 'data["start.sh"]', pattern: "'pm.max_children = 20'"}
+      - equal: {path: 'data["zz-php.ini"]', value: "display_errors = stderr\n"}
+  - it: refuses a partly set pool
+    template: templates/app-deployment.yaml
+    set:
+      app.phpFpm.maxChildren: null
+    asserts:
+      - failedTemplate:
+          errorPattern: set maxChildren, startServers, minSpareServers and maxSpareServers together
+  - it: refuses a pool php-fpm won't start with
+    template: templates/app-deployment.yaml
+    set:
+      app.phpFpm.startServers: 10
+    asserts:
+      - failedTemplate:
+          errorPattern: minSpareServers <= startServers <= maxSpareServers <= maxChildren

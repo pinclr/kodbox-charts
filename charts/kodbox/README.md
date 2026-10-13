@@ -115,8 +115,9 @@ of kodbox (e.g. the ingress `proxy-body-size` above). Assembling the file needs
 free space on the data volume for the file being uploaded. Downloads aren't
 chunked; they support HTTP Range requests. WebDAV uploads
 (`/remote.php/dav/files/`) skip PHP's limit and allow 100G per request. To
-change these limits, override nginx.conf or php.ini with `app.extraVolumes` and
-`app.extraVolumeMounts`.
+change these limits, set `app.nginx.clientMaxBodySize` and
+`app.phpIni.upload_max_filesize`/`post_max_size` (see
+[nginx and php-fpm](#nginx-and-php-fpm)).
 
 ## Document server
 
@@ -282,6 +283,37 @@ The requests are small against the limits, so the scheduler places pods on
 their requests and the limits can burst. Plan for **at least 2 worker nodes**
 (so the app replicas land on different nodes) with **8 vCPU / 32 GiB** each:
 kodoffice alone may burst to 16Gi and needs a node with that much free.
+
+### nginx and php-fpm
+
+The kodbox image is tuned for a dedicated server. nginx's
+`worker_processes auto` starts one worker per CPU of the node, not of the pod
+(80 workers, ~2GB, on an 80-core node), and php-fpm keeps 101+ idle workers
+(`max_children` 505). Together they can fill the memory limit before any
+traffic. The chart sizes both for the pod: the app container starts through
+`start.sh` (from the app ConfigMap), which edits the image's nginx.conf and
+www.conf and then runs the image's entrypoint.
+
+| Value | Default | Production | Sets |
+|---|---|---|---|
+| `app.nginx.workerProcesses` | container CPU limit, rounded up (2 without a limit) | same (4) | `worker_processes` |
+| `app.nginx.clientMaxBodySize` | image's 1024M | same | `client_max_body_size` (http level) |
+| `app.phpFpm.maxChildren` / `startServers` / `minSpareServers` / `maxSpareServers` | 20 / 4 / 2 / 8 | 40 / 8 / 4 / 16 | `pm.*` in www.conf |
+| `app.phpIni` | `display_errors: stderr` | same | `zz-php.ini` in PHP's conf.d |
+
+Each busy php-fpm worker can use up to PHP's `memory_limit` (512M in the
+image), so raise `maxChildren` together with the memory limit. Set all four
+`phpFpm` values to null to keep the image's pool. The start log shows each
+change (`kubectl logs`, lines starting with `kodbox-chart:`).
+
+`display_errors: stderr` fixes the image's `display_errors=STDOUT`, which PHP
+reads as "on": PHP warnings showed up in responses instead of the container
+log. Set it to null to keep the image's setting.
+
+A file replaced through `app.extraVolumeMounts` (e.g. your own www.conf) is
+left as mounted; the log says so. The image's `FPM_MAX`/`FPM_START`/
+`FPM_MIN_SPARE`/`FPM_MAX_SPARE` variables in `app.extraEnv` still work and
+take precedence, since the entrypoint applies them after `start.sh`.
 
 ### What drives each service
 
@@ -730,6 +762,13 @@ Kodbox application (nginx + php-fpm, port 80).
 | `app.preStopSleepSeconds` | integer | `10` | Seconds the pod keeps serving after termination starts, while it's removed from routing; 0 disables. |
 | `app.terminationGracePeriodSeconds` | integer | `60` | Time for the preStop sleep plus nginx/php-fpm to stop gracefully. |
 | `app.lifecycle` | object | `{}` | Container lifecycle hooks; replaces the default preStop sleep when set. |
+| `app.nginx.workerProcesses` | integer / string | `""` | nginx workers: an integer or "auto" (one per node CPU); empty uses the container's CPU limit, or 2 without one. |
+| `app.nginx.clientMaxBodySize` | string | `""` | nginx request body limit, e.g. 2048M; empty keeps the image's 1024M. |
+| `app.phpFpm.maxChildren` | integer / null | `20` | Most workers at once; each can use up to PHP's memory_limit. |
+| `app.phpFpm.startServers` | integer / null | `4` | Workers started with php-fpm. |
+| `app.phpFpm.minSpareServers` | integer / null | `2` | Fewest idle workers kept. |
+| `app.phpFpm.maxSpareServers` | integer / null | `8` | Most idle workers kept. |
+| `app.phpIni` | object | `{"display_errors": "stderr"}` | php.ini settings loaded after the image's; written as-is. The default display_errors=stderr keeps PHP errors out of responses. |
 | `app.resources` | object | `{"requests": {"cpu": "250m", "memory": "512Mi"}, "limits"...` | Kubernetes resource requests and limits for the app. |
 | `app.nodeSelector` | object | `{}` | Node labels for scheduling app. |
 | `app.tolerations` | array | `[]` | Tolerations for app pods. |
