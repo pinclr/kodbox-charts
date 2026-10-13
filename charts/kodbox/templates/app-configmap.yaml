@@ -13,6 +13,70 @@ data:
     header('Content-Type: text/plain');
     header('Cache-Control: no-store');
     echo 'ok';
+  {{- $rt := include "kodbox.appRuntime" . | fromYaml }}
+  {{- $nginx := $rt.nginx | default dict }}
+  {{- $fpm := $rt.phpFpm | default dict }}
+  # Sizes nginx and php-fpm for the pod, then runs the image's entrypoint.
+  start.sh: |
+    #!/bin/sh
+    set -eu
+
+    # set_line FILE PATTERN LINE: replaces the line starting with PATTERN.
+    # Files mounted read-only (app.extraVolumeMounts) are left as they are.
+    set_line() {
+      if [ ! -w "$1" ]; then
+        echo "kodbox-chart: $1 is read-only, not setting $3"
+      elif ! grep -q "$2" "$1"; then
+        echo "kodbox-chart: no '$2' line in $1, not setting $3"
+      else
+        sed -i "s|$2.*|$3|" "$1"
+        echo "kodbox-chart: $1: $3"
+      fi
+    }
+
+    {{- $workers := $nginx.workerProcesses }}
+    {{- if and (not (kindIs "invalid" $workers)) (ne (toString $workers) "") }}
+    workers={{ ternary (int64 $workers) $workers (kindIs "float64" $workers) }}
+    {{- else }}
+    # One nginx worker per CPU of the container's limit; without a limit 2.
+    # worker_processes auto would count the node's CPUs instead.
+    workers=2
+    quota=''
+    period=''
+    if [ -r /sys/fs/cgroup/cpu.max ]; then
+      read -r quota period < /sys/fs/cgroup/cpu.max
+    elif [ -r /sys/fs/cgroup/cpu/cpu.cfs_quota_us ]; then
+      quota=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
+      period=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us)
+    fi
+    case "$quota" in
+      ''|max|-1) ;;
+      *) workers=$(( (quota + period - 1) / period )) ;;
+    esac
+    {{- end }}
+    set_line /etc/nginx/nginx.conf '^worker_processes ' "worker_processes $workers;"
+    {{- with $nginx.clientMaxBodySize }}
+    # The http-level limit; the image's WebDAV location keeps its own.
+    set_line /etc/nginx/nginx.conf '^    client_max_body_size ' '    client_max_body_size {{ . }};'
+    {{- end }}
+    {{- range $key := list "maxChildren" "startServers" "minSpareServers" "maxSpareServers" }}
+    {{- $v := index $fpm $key }}
+    {{- if not (kindIs "invalid" $v) }}
+    {{- $directive := printf "pm.%s" (regexReplaceAll "([A-Z])" $key "_${1}" | lower) }}
+    set_line /usr/local/etc/php-fpm.d/www.conf '^{{ $directive }} = ' '{{ $directive }} = {{ int $v }}'
+    {{- end }}
+    {{- end }}
+
+    exec /entrypoint.sh "$@"
+  {{- with $rt.phpIni }}
+  # Loaded after the image's docker-*.ini files.
+  zz-php.ini: |
+    {{- range $k, $v := . }}
+    {{- if not (kindIs "invalid" $v) }}
+    {{ $k }} = {{ ternary (int64 $v) $v (and (kindIs "float64" $v) (eq (float64 (int64 $v)) $v)) }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
   {{- with .Values.timezone }}
   # PHP ignores TZ; kodbox's dates follow date.timezone.
   zz-timezone.ini: |

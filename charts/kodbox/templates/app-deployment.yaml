@@ -85,6 +85,10 @@ spec:
         - name: kodbox
           image: {{ $image }}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          # start.sh applies app.nginx and app.phpFpm, then runs the image's
+          # entrypoint with the image's default command.
+          command: ["/bin/sh", "/kodbox-chart/start.sh"]
+          args: ["supervisord", "-n", "-c", "/etc/supervisord.conf"]
           {{- with .Values.app.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -163,6 +167,16 @@ timeoutSeconds: 5` "override" .Values.app.readinessProbe) | nindent 10 }}
               mountPath: /var/www/html/healthz.php
               subPath: healthz.php
               readOnly: true
+            - name: healthz
+              mountPath: /kodbox-chart/start.sh
+              subPath: start.sh
+              readOnly: true
+            {{- if (include "kodbox.appRuntime" . | fromYaml).phpIni }}
+            - name: healthz
+              mountPath: /usr/local/etc/php/conf.d/zz-php.ini
+              subPath: zz-php.ini
+              readOnly: true
+            {{- end }}
             {{- if .Values.timezone }}
             - name: healthz
               mountPath: /usr/local/etc/php/conf.d/zz-timezone.ini

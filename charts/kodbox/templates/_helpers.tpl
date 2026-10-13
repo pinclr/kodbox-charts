@@ -100,6 +100,22 @@ An explicit 0 still disables the preStop sleep.
 {{- end }}
 
 {{/*
+App runtime sizing as YAML (nginx, phpFpm, phpIni). Each section falls back
+to the chart defaults when missing, e.g. after an upgrade with --reuse-values.
+*/}}
+{{- define "kodbox.appRuntime" -}}
+{{- $defaults := dict
+  "nginx" (dict "workerProcesses" "" "clientMaxBodySize" "")
+  "phpFpm" (dict "maxChildren" 20 "startServers" 4 "minSpareServers" 2 "maxSpareServers" 8)
+  "phpIni" (dict "display_errors" "stderr") }}
+{{- $out := dict }}
+{{- range $k, $v := $defaults }}
+{{- $_ := set $out $k (ternary (index $.Values.app $k) $v (hasKey $.Values.app $k)) }}
+{{- end }}
+{{- toYaml $out }}
+{{- end }}
+
+{{/*
 storageClassName for a volume: the component's storageClass, else
 global.storageClass, else omitted (cluster default). "-" sets an empty
 storageClassName, disabling dynamic provisioning.
@@ -299,6 +315,19 @@ topologySpreadConstraints:
 {{- $app := .Values.app }}
 {{- if and (not $app.lifecycle) (ge (int (include "kodbox.appPreStopSleep" .)) (int (include "kodbox.appGracePeriod" .))) }}
 {{- fail "app.preStopSleepSeconds must be lower than app.terminationGracePeriodSeconds, leaving time for nginx and php-fpm to stop" }}
+{{- end }}
+{{- $fpm := (include "kodbox.appRuntime" . | fromYaml).phpFpm | default dict }}
+{{- $fpmSet := 0 }}
+{{- range (list "maxChildren" "startServers" "minSpareServers" "maxSpareServers") }}
+{{- if not (kindIs "invalid" (index $fpm .)) }}{{ $fpmSet = add1 $fpmSet }}{{ end }}
+{{- end }}
+{{- if and $fpmSet (lt $fpmSet 4) }}
+{{- fail "app.phpFpm: set maxChildren, startServers, minSpareServers and maxSpareServers together, or all to null to keep the image's pool" }}
+{{- end }}
+{{- if eq $fpmSet 4 }}
+{{- if not (and (le (int $fpm.minSpareServers) (int $fpm.startServers)) (le (int $fpm.startServers) (int $fpm.maxSpareServers)) (le (int $fpm.maxSpareServers) (int $fpm.maxChildren))) }}
+{{- fail "app.phpFpm needs minSpareServers <= startServers <= maxSpareServers <= maxChildren, or php-fpm won't start" }}
+{{- end }}
 {{- end }}
 {{- $as := $app.autoscaling }}
 {{- if and $as.enabled (lt (int $as.maxReplicas) (int $as.minReplicas)) }}
