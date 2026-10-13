@@ -105,6 +105,19 @@ e.g. `nginx.ingress.kubernetes.io/proxy-body-size: "0"`.
 Uploads and downloads are fine while data flows. `gateway.timeouts` sets the
 HTTPRoute request timeouts but doesn't change a proxy's idle timeout.
 
+**Upload size:** the kodbox image caps each request, not each file:
+`client_max_body_size 1024M` in nginx and `upload_max_filesize`/`post_max_size`
+512M in PHP. Larger files go up in chunks through kodbox's own protocol
+(`explorer/upload/fileUpload` with `chunk`, `chunks` and `chunkSize`), so the
+file size is limited only by storage. Keep the chunk size (kodbox admin upload
+settings, or your client's) under 512M, and allow at least that much in front
+of kodbox (e.g. the ingress `proxy-body-size` above). Assembling the file needs
+free space on the data volume for the file being uploaded. Downloads aren't
+chunked; they support HTTP Range requests. WebDAV uploads
+(`/remote.php/dav/files/`) skip PHP's limit and allow 100G per request. To
+change these limits, override nginx.conf or php.ini with `app.extraVolumes` and
+`app.extraVolumeMounts`.
+
 ## Document server
 
 The `kodoffice` component runs one of two document servers
