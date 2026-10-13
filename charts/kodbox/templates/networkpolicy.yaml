@@ -3,7 +3,11 @@
 {{- $metrics := eq (include "kodbox.metricsEnabled" .) "true" }}
 {{- $metricsFrom := .Values.networkPolicy.metricsFrom | default (list) }}
 {{- if .Values.db.enabled }}
-{{- $rules = append $rules (dict "target" "db" "from" (ternary (list "app" "backup") (list "app") .Values.backup.enabled) "ports" (list 3306) "scrapePort" (ternary 9104 0 $metrics) "scrapeFrom" $metricsFrom) }}
+{{- $dbFrom := ternary (list "app" "backup") (list "app") .Values.backup.enabled }}
+{{- if $metrics }}
+{{- $dbFrom = append $dbFrom "db-metrics-job" }}
+{{- end }}
+{{- $rules = append $rules (dict "target" "db" "from" $dbFrom "ports" (list 3306) "scrapePort" (ternary 9104 0 $metrics) "scrapeFrom" $metricsFrom) }}
 {{- end }}
 {{- if .Values.redis.enabled }}
 {{- $rules = append $rules (dict "target" "redis" "from" (list "app") "ports" (list 6379) "scrapePort" (ternary 9121 0 $metrics) "scrapeFrom" $metricsFrom) }}

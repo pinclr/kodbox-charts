@@ -64,9 +64,10 @@ metadata:
 spec:
   template:
     metadata:
+      # The db NetworkPolicy admits this component, like app and backup.
       labels:
         {{- include "kodbox.labels" . | nindent 8 }}
-        app.kubernetes.io/component: db
+        app.kubernetes.io/component: db-metrics-job
     spec:
       serviceAccountName: {{ include "kodbox.serviceAccountName" . }}
       restartPolicy: Never

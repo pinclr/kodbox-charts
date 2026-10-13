@@ -91,6 +91,17 @@ tests:
         equal: {path: "stringData.user", value: kodbox_exporter}
       - documentSelector: {path: kind, value: Job}
         equal: {path: "metadata.name", value: kodbox-db-metrics}
+      # The Job reaches the database, so the db NetworkPolicy must know it.
+      - documentSelector: {path: kind, value: Job}
+        equal:
+          path: "spec.template.metadata.labels"
+          value:
+            helm.sh/chart: kodbox-0.10.0
+            app.kubernetes.io/name: kodbox
+            app.kubernetes.io/instance: kodbox
+            app.kubernetes.io/version: "1.68.10"
+            app.kubernetes.io/managed-by: Helm
+            app.kubernetes.io/component: db-metrics-job
       - documentSelector: {path: kind, value: Job}
         equal: {path: "spec.template.spec.containers[0].envFrom[1].secretRef.name", value: kodbox-db-metrics}
   - it: skips the account resources without the bundled database
@@ -156,6 +167,25 @@ tests:
         equal: {path: "spec.ingress[1].from[0].namespaceSelector.matchLabels.team", value: monitoring}
       - documentSelector: {path: metadata.name, value: kodbox-redis}
         equal: {path: "spec.ingress[1].ports[0].port", value: 9121}
+      - documentSelector: {path: metadata.name, value: kodbox-db}
+        equal:
+          path: "spec.ingress[0].from[1].podSelector.matchLabels"
+          value:
+            app.kubernetes.io/name: kodbox
+            app.kubernetes.io/instance: kodbox
+            app.kubernetes.io/component: db-metrics-job
+  - it: keeps the db policy's app-only access when metrics are off
+    template: templates/networkpolicy.yaml
+    asserts:
+      - documentSelector: {path: metadata.name, value: kodbox-db}
+        notContains:
+          path: "spec.ingress[0].from"
+          content:
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: kodbox
+                app.kubernetes.io/instance: kodbox
+                app.kubernetes.io/component: db-metrics-job
   - it: keeps policies untouched when metrics are off
     template: templates/networkpolicy.yaml
     asserts:
