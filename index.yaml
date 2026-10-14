@@ -4,6 +4,50 @@ entries:
   - annotations:
       artifacthub.io/category: storage
       artifacthub.io/changes: |
+        - kind: added
+          description: metrics.enabled - Prometheus endpoints for the app (php-fpm status, nginx exporter), db (mysqld_exporter) and redis (redis_exporter); milvus already serves its own
+        - kind: added
+          description: metrics.podMonitor.enabled - one PodMonitor per component (needs the Prometheus Operator)
+        - kind: added
+          description: networkPolicy.metricsFrom - who may scrape the db, redis and milvus metrics ports
+        - kind: added
+          description: the db exporter logs in with its own MariaDB account, created by a post-install,post-upgrade hook Job
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/pinclr/kodbox-charts
+        - name: kodbox
+          url: https://kodcloud.com
+      artifacthub.io/signKey: |
+        fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
+        url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
+    apiVersion: v2
+    appVersion: 1.68.10
+    created: "2026-10-14T02:27:07.922214264Z"
+    description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
+    digest: 593b7be9d5893856c97ea8c7f236175e1d16cca3204f420846c3002cb929aa34
+    home: https://github.com/pinclr/kodbox-charts
+    icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
+    keywords:
+    - kodbox
+    - file-manager
+    - cloud-storage
+    - office
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: pinclr
+      url: https://github.com/pinclr
+    name: kodbox
+    sources:
+    - https://github.com/pinclr/kodbox-charts
+    - https://github.com/kalcaddle/kodbox
+    type: application
+    urls:
+    - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.10.0/kodbox-0.10.0.tgz
+    version: 0.10.0
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |
         - kind: changed
           description: nginx workers follow the container's CPU limit instead of the node's CPU count (app.nginx.workerProcesses)
         - kind: changed
@@ -872,4 +916,4 @@ entries:
     urls:
     - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.0/kodbox-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-13T04:48:46.816787007Z"
+generated: "2026-10-14T02:27:07.922313513Z"
