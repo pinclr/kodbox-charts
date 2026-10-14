@@ -336,6 +336,30 @@ schema = {
         "networkPolicy": obj("NetworkPolicies restricting access to the backing services.", {
             "enabled": b("Create the NetworkPolicies."),
             "milvusExtraFrom": free("Extra NetworkPolicy 'from' peers allowed to reach Milvus.", "array"),
+            "metricsFrom": free("With metrics enabled, NetworkPolicy 'from' peers allowed to scrape the db, redis and Milvus metrics ports.", "array"),
+        }),
+        "metrics": obj("Prometheus metrics: exporter sidecars and PodMonitors (README 'Metrics').", {
+            "enabled": b("Expose metrics endpoints and sidecars."),
+            "podMonitor": obj("PodMonitor per component (needs the Prometheus Operator).", {
+                "enabled": b("Create PodMonitors."),
+                "interval": s("Scrape interval."),
+                "scrapeTimeout": s("Scrape timeout; empty uses the operator's default."),
+                "labels": free("Labels for the PodMonitors, so the Prometheus selector matches."),
+            }),
+            "nginxExporter": obj("nginx exporter sidecar on the app pod.", {
+                "image": image("the nginx exporter"),
+                "resources": resources("the nginx exporter"),
+            }, required=["image"]),
+            "mysqldExporter": obj("mysqld_exporter sidecar on the db pod.", {
+                "image": image("mysqld_exporter"),
+                "username": s("MariaDB account the exporter logs in as (max 16 characters); the chart's hook Job creates it.", maxLength=16),
+                "resources": resources("mysqld_exporter"),
+            }, required=["image"]),
+            "redisExporter": obj("redis_exporter sidecar on the redis pod.", {
+                "image": image("redis_exporter"),
+                "resources": resources("redis_exporter"),
+            }, required=["image"]),
+            "securityContext": free("Security context for the exporter sidecars and the metrics account Job."),
         }),
         "gateway": obj("Gateway API routing (HTTPRoutes, optionally a dedicated Gateway).", {
             "enabled": b("Create HTTPRoutes."),

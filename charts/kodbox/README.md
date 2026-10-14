@@ -449,6 +449,39 @@ the size in values to match: an upgrade to a smaller size than the live one fail
 
 The app and kodoffice are not restricted, because the gateway proxies to them.
 To let another in-cluster service use Milvus, add it to `milvusExtraFrom`.
+With `metrics.enabled`, the db, redis and Milvus metrics ports also admit
+`networkPolicy.metricsFrom` (the app has no NetworkPolicy, so its metrics
+ports stay reachable).
+
+## Metrics
+
+`metrics.enabled` (default `false`) exposes Prometheus metrics:
+
+| Component | Port | Endpoint |
+|---|---|---|
+| app | 9254 | `/fpm-metrics` (php-fpm, OpenMetrics); 9113 `/metrics` (nginx exporter sidecar) |
+| db | 9104 | `/metrics` (mysqld_exporter sidecar) |
+| redis | 9121 | `/metrics` (redis_exporter sidecar) |
+| milvus (if enabled) | 9091 | `/metrics` (Milvus's own, no switch needed) |
+
+On the app pod, `start.sh` makes php-fpm's status page listen on
+`127.0.0.1:9001` and drops an nginx status server on 9254 (a file from
+`.Values.app.extraVolumeMounts` at those paths wins, as always).
+
+The db exporter logs in with its own MariaDB account
+(`metrics.mysqldExporter.username`, from 127.0.0.1 only, no access to kodbox's
+tables). A `post-install,post-upgrade` hook Job creates the account and keeps
+its generated password in Secret `<release>-db-metrics` (`user`/`password`),
+kept across upgrades and uninstalls; a Role lets the Job correct the Secret if
+it was edited or wiped.
+
+With the Prometheus Operator, `metrics.podMonitor.enabled` creates one
+PodMonitor per component (so Prometheus's pod monitor selector may need
+`metrics.podMonitor.labels` to match). Without PodMonitors, scrape the pods on
+the ports above yourself. `networkPolicy.metricsFrom` is who may scrape the
+db/redis/Milvus metrics ports when NetworkPolicies are on — empty blocks
+scraping those three entirely (the app has no NetworkPolicy and stays
+reachable).
 
 ## Health checks
 
@@ -1125,6 +1158,39 @@ NetworkPolicies restricting access to the backing services.
 |---|---|---|---|
 | `networkPolicy.enabled` | boolean | `true` | Create the NetworkPolicies. |
 | `networkPolicy.milvusExtraFrom` | array | `[]` | Extra NetworkPolicy 'from' peers allowed to reach Milvus. |
+| `networkPolicy.metricsFrom` | array | `[]` | With metrics enabled, NetworkPolicy 'from' peers allowed to scrape the db, redis and Milvus metrics ports. |
+
+### metrics
+
+Prometheus metrics: exporter sidecars and PodMonitors (README 'Metrics').
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `metrics.enabled` | boolean | `false` | Expose metrics endpoints and sidecars. |
+| `metrics.podMonitor.enabled` | boolean | `false` | Create PodMonitors. |
+| `metrics.podMonitor.interval` | string | `"30s"` | Scrape interval. |
+| `metrics.podMonitor.scrapeTimeout` | string | `""` | Scrape timeout; empty uses the operator's default. |
+| `metrics.podMonitor.labels` | object | `{}` | Labels for the PodMonitors, so the Prometheus selector matches. |
+| `metrics.nginxExporter.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `metrics.nginxExporter.image.repository` | string | `"nginx/nginx-prometheus-exporter"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `metrics.nginxExporter.image.tag` | string / number | `"1.5.3"` | Image tag. |
+| `metrics.nginxExporter.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `metrics.nginxExporter.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `metrics.nginxExporter.resources` | object | `{"requests": {"cpu": "10m", "memory": "16Mi"}, "limits": ...` | Kubernetes resource requests and limits for the nginx exporter. |
+| `metrics.mysqldExporter.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `metrics.mysqldExporter.image.repository` | string | `"prom/mysqld-exporter"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `metrics.mysqldExporter.image.tag` | string / number | `"v0.20.0"` | Image tag. |
+| `metrics.mysqldExporter.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `metrics.mysqldExporter.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `metrics.mysqldExporter.username` | string | `"kodbox_exporter"` | MariaDB account the exporter logs in as (max 16 characters); the chart's hook Job creates it. |
+| `metrics.mysqldExporter.resources` | object | `{"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": ...` | Kubernetes resource requests and limits for mysqld_exporter. |
+| `metrics.redisExporter.image.registry` | string | `"docker.io"` | Image registry; global.imageRegistry overrides it. |
+| `metrics.redisExporter.image.repository` | string | `"oliver006/redis_exporter"` | Image repository, without the registry (one that starts with a registry host is used as-is). |
+| `metrics.redisExporter.image.tag` | string / number | `"v1.92.1"` | Image tag. |
+| `metrics.redisExporter.image.digest` | string | `""` | Image digest (sha256:...) to pin a build; used together with the tag. |
+| `metrics.redisExporter.image.pullPolicy` | "Always" \| "IfNotPresent" \| "Never" | `"IfNotPresent"` | Image pull policy. |
+| `metrics.redisExporter.resources` | object | `{"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": ...` | Kubernetes resource requests and limits for redis_exporter. |
+| `metrics.securityContext` | object | `{"allowPrivilegeEscalation": false, "readOnlyRootFilesyst...` | Security context for the exporter sidecars and the metrics account Job. |
 
 ### gateway
 

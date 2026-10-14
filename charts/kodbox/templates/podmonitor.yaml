@@ -1,0 +1,42 @@
+{{- if and (eq (include "kodbox.metricsEnabled" .) "true") .Values.metrics.podMonitor.enabled }}
+{{- $common := dict "interval" .Values.metrics.podMonitor.interval }}
+{{- with .Values.metrics.podMonitor.scrapeTimeout }}
+{{- $_ := set $common "scrapeTimeout" . }}
+{{- end }}
+{{- range $m := list
+      (dict "target" "app" "ports" (list (dict "port" "fpm-metrics" "path" "/fpm-metrics") (dict "port" "nginx-metrics")))
+      (dict "target" "db" "when" $.Values.db.enabled "ports" (list (dict "port" "metrics")))
+      (dict "target" "redis" "when" $.Values.redis.enabled "ports" (list (dict "port" "metrics")))
+      (dict "target" "milvus" "when" $.Values.milvus.enabled "ports" (list (dict "port" "metrics"))) }}
+{{- if or (kindIs "invalid" $m.when) $m.when }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "kodbox.componentName" (dict "ctx" $ "component" $m.target) }}
+  namespace: {{ include "kodbox.namespace" $ }}
+  labels:
+    {{- include "kodbox.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $m.target }}
+    {{- with $.Values.metrics.podMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "kodbox.selectorLabels" (dict "ctx" $ "component" $m.target) | nindent 6 }}
+  podMetricsEndpoints:
+    {{- range $m.ports }}
+    - port: {{ .port }}
+      {{- range $k, $v := . }}
+      {{- if ne $k "port" }}
+      {{ $k }}: {{ $v }}
+      {{- end }}
+      {{- end }}
+      {{- range $k, $v := $common }}
+      {{ $k }}: {{ $v | quote }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

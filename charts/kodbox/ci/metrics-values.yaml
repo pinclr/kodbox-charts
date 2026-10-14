@@ -1,0 +1,12 @@
+# Values for the CI test install (ct install on kind). Enables metrics:
+# the exporter sidecars, php-fpm's status page and the hook Job that creates
+# the exporter's MariaDB account. PodMonitor is off: kind has no operator CRDs.
+metrics:
+  enabled: true
+networkPolicy:
+  metricsFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+milvus:
+  enabled: true

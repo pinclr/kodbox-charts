@@ -139,6 +139,10 @@ spec:
           ports:
             - name: http
               containerPort: 80
+            {{- if include "kodbox.metricsEnabled" . }}
+            - name: fpm-metrics
+              containerPort: 9254
+            {{- end }}
           # healthz.php exercises nginx + php-fpm without touching the database.
           # First start copies the kodbox source and runs the installer before
           # nginx starts, so allow up to 10 minutes.
@@ -183,6 +187,12 @@ timeoutSeconds: 5` "override" .Values.app.readinessProbe) | nindent 10 }}
               subPath: zz-timezone.ini
               readOnly: true
             {{- end }}
+            {{- if include "kodbox.metricsEnabled" . }}
+            - name: healthz
+              mountPath: /etc/nginx/sites-enabled/kodbox-metrics.conf
+              subPath: kodbox-metrics.conf
+              readOnly: true
+            {{- end }}
             {{- with .Values.app.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -190,6 +200,9 @@ timeoutSeconds: 5` "override" .Values.app.readinessProbe) | nindent 10 }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- if include "kodbox.metricsEnabled" . }}
+        {{- include "kodbox.exporterContainer" (dict "ctx" . "name" "nginx-exporter" "exporter" .Values.metrics.nginxExporter "port" 9113 "portName" "nginx-metrics" "args" (list "--nginx.scrape-uri=http://127.0.0.1:9254/nginx_status")) | nindent 8 }}
+        {{- end }}
         {{- with (include "kodbox.extraContainers" (dict "v" .Values.app) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}

@@ -755,6 +755,75 @@ milvus:
     readinessProbe: {}
     startupProbe: {}
 
+## Prometheus metrics, off by default. See README "Metrics".
+## app: php-fpm's status page in OpenMetrics format (port 9254, /fpm-metrics)
+##   and an nginx exporter sidecar (9113)
+## db (bundled MariaDB): mysqld_exporter sidecar (9104) with its own account
+## redis (bundled): redis_exporter sidecar (9121)
+## milvus serves its own metrics (9091) whenever it's enabled.
+metrics:
+  enabled: false
+  # PodMonitor for the Prometheus Operator (needs its CRDs).
+  podMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: ""
+    # Labels your Prometheus selects PodMonitors by, e.g. release: kube-prometheus-stack
+    labels: {}
+  nginxExporter:
+    image:
+      registry: docker.io
+      repository: nginx/nginx-prometheus-exporter
+      tag: 1.5.3
+      digest: ""
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  mysqldExporter:
+    image:
+      registry: docker.io
+      repository: prom/mysqld-exporter
+      tag: v0.20.0
+      digest: ""
+      pullPolicy: IfNotPresent
+    # MariaDB account the exporter logs in as, from 127.0.0.1 only, with
+    # PROCESS, REPLICATION CLIENT and SELECT on performance_schema (no access
+    # to kodbox's data). A hook Job creates it after each install and upgrade
+    # and sets its password from a generated Secret.
+    username: kodbox_exporter
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  redisExporter:
+    image:
+      registry: docker.io
+      repository: oliver006/redis_exporter
+      tag: v1.92.1
+      digest: ""
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  # Security context for the exporter sidecars and the account Job's container.
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
 ## NetworkPolicies restricting who can reach the backing services:
 ## db/redis/imaginary from the app, etcd/RustFS (minio) from milvus, milvus from the app.
 ## The app and kodoffice stay open because the gateway proxies to them.
@@ -766,6 +835,13 @@ networkPolicy:
   #  - namespaceSelector:
   #      matchLabels:
   #        kubernetes.io/metadata.name: ai
+  # With metrics.enabled: peers allowed to scrape the db, redis and milvus
+  # metrics ports, as NetworkPolicy "from" entries. Empty blocks scraping
+  # those three; the app has no NetworkPolicy and stays reachable.
+  metricsFrom: []
+  #  - namespaceSelector:
+  #      matchLabels:
+  #        kubernetes.io/metadata.name: monitoring
 
 ## Gateway API routing (use instead of ingress on clusters with a Gateway
 ## controller, e.g. Cilium). HTTPRoutes attach to an existing shared Gateway by

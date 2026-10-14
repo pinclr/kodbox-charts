@@ -207,6 +207,40 @@ metrics exporter. Call with (dict "v" .Values.<component>).
 {{- end }}
 {{- end }}
 
+{{/* "true" when metrics.enabled; tolerates a missing metrics key (--reuse-values). */}}
+{{- define "kodbox.metricsEnabled" -}}
+{{- if and .Values.metrics .Values.metrics.enabled }}true{{ end }}
+{{- end }}
+
+{{/*
+A Prometheus exporter sidecar. Takes ctx, name, exporter (its metrics.* values),
+port, portName and optionally args and env (lists).
+*/}}
+{{- define "kodbox.exporterContainer" -}}
+- name: {{ .name }}
+  image: {{ include "kodbox.image" (dict "ctx" .ctx "image" .exporter.image) }}
+  imagePullPolicy: {{ .exporter.image.pullPolicy }}
+  {{- with .args }}
+  args:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .env }}
+  env:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  ports:
+    - name: {{ .portName }}
+      containerPort: {{ .port }}
+  {{- with .ctx.Values.metrics.securityContext }}
+  securityContext:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .exporter.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+
 {{/* Backup image: backup.image fields, falling back to db.image. */}}
 {{- define "kodbox.backupImage" -}}
 {{- $b := .Values.backup.image }}
