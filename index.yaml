@@ -4,6 +4,44 @@ entries:
   - annotations:
       artifacthub.io/category: storage
       artifacthub.io/changes: |
+        - kind: fixed
+          description: the db exporter account gains MariaDB's SLAVE MONITOR privilege, so its slave_status scrape no longer errors every scrape
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart source
+          url: https://github.com/pinclr/kodbox-charts
+        - name: kodbox
+          url: https://kodcloud.com
+      artifacthub.io/signKey: |
+        fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
+        url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
+    apiVersion: v2
+    appVersion: 1.68.10
+    created: "2026-10-15T02:15:48.494665644Z"
+    description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
+    digest: 625bbc9e5b0e2a4933dc78004d38ebbdb1ea50d58b301373b25b19f91f9a74e3
+    home: https://github.com/pinclr/kodbox-charts
+    icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
+    keywords:
+    - kodbox
+    - file-manager
+    - cloud-storage
+    - office
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: pinclr
+      url: https://github.com/pinclr
+    name: kodbox
+    sources:
+    - https://github.com/pinclr/kodbox-charts
+    - https://github.com/kalcaddle/kodbox
+    type: application
+    urls:
+    - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.10.1/kodbox-0.10.1.tgz
+    version: 0.10.1
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |
         - kind: added
           description: metrics.enabled - Prometheus endpoints for the app (php-fpm status, nginx exporter), db (mysqld_exporter) and redis (redis_exporter); milvus already serves its own
         - kind: added
@@ -916,4 +954,4 @@ entries:
     urls:
     - https://github.com/pinclr/kodbox-charts/releases/download/kodbox-0.1.0/kodbox-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-14T02:27:07.922313513Z"
+generated: "2026-10-15T02:15:48.494743531Z"
