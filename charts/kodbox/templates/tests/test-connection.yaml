@@ -39,9 +39,16 @@ spec:
         - |
           set -e
           check() {
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$2") || true
-            echo "$1: $2 -> $code"
-            case "$code" in 2??|3??) ;; *) exit 1 ;; esac
+            # KodOffice's nginx answers 502 while its documentserver backend
+            # is still booting; give endpoints up to 2 minutes.
+            for i in $(seq 1 24); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$2") || true
+              [ "$i" = 24 ] || echo "$1: $2 -> $code (try $i)"
+              case "$code" in 2??|3??) echo "$1: $2 -> $code"; return ;; esac
+              sleep 5
+            done
+            echo "$1: $2 -> $code, still failing"
+            exit 1
           }
           check "app" "http://{{ $app }}:{{ .Values.app.service.port }}/healthz.php"
           check "app with database" "http://{{ $app }}:{{ .Values.app.service.port }}/"

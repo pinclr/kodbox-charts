@@ -792,7 +792,7 @@ metrics:
       digest: ""
       pullPolicy: IfNotPresent
     # MariaDB account the exporter logs in as, from 127.0.0.1 only, with
-    # PROCESS, REPLICATION CLIENT and SELECT on performance_schema (no access
+    # PROCESS, REPLICATION CLIENT, SLAVE MONITOR and SELECT on performance_schema (no access
     # to kodbox's data). A hook Job creates it after each install and upgrade
     # and sets its password from a generated Secret.
     username: kodbox_exporter
