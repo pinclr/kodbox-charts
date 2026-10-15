@@ -84,7 +84,7 @@ tests:
       - documentSelector: {path: kind, value: Job}
         matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "CREATE USER IF NOT EXISTS '\\$\\{user\\}'@'127.0.0.1'"}
       - documentSelector: {path: kind, value: Job}
-        matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "GRANT PROCESS, REPLICATION CLIENT ON \\*\\.\\*"}
+        matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "GRANT PROCESS, REPLICATION CLIENT, SLAVE MONITOR ON \\*\\.\\*"}
       - documentSelector: {path: kind, value: Job}
         matchRegex: {path: "spec.template.spec.containers[0].command[2]", pattern: "GRANT SELECT ON performance_schema"}
       - documentSelector: {path: kind, value: Secret}
@@ -98,7 +98,7 @@ tests:
         equal:
           path: "spec.template.metadata.labels"
           value:
-            helm.sh/chart: kodbox-0.10.0
+            helm.sh/chart: kodbox-0.10.1
             app.kubernetes.io/name: kodbox
             app.kubernetes.io/instance: kodbox
             app.kubernetes.io/version: "1.68.10"
