@@ -13,7 +13,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: docker.io/kodcloud/kodbox:1.68.10
+          value: docker.io/kodcloud/kodbox:1.70.03
   - it: global.imageRegistry replaces the registry
     template: templates/db.yaml
     documentSelector: {path: kind, value: StatefulSet}
@@ -30,7 +30,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: docker.io/kodcloud/kodbox:1.68.10@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          value: docker.io/kodcloud/kodbox:1.70.03@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   - it: keeps a repository that already names a registry host
     template: templates/app-deployment.yaml
     set:
@@ -39,7 +39,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: quay.io/example/kodbox:1.68.10
+          value: quay.io/example/kodbox:1.70.03
   - it: backup image falls back to db.image
     template: templates/backup-cronjob.yaml
     set:

@@ -16,7 +16,7 @@ app:
   image:
     # Empty uses the chart's appVersion. Pin a digest so every replica and
     # restart runs the same build. Find it with:
-    #   skopeo inspect docker://docker.io/kodcloud/kodbox:1.68.10
+    #   skopeo inspect docker://docker.io/kodcloud/kodbox:1.70.03
     tag: ""
     digest: "" # e.g. "sha256:..."
     pullPolicy: IfNotPresent

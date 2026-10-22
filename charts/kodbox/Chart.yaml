@@ -2,8 +2,8 @@ apiVersion: v2
 name: kodbox
 description: Kodbox web file manager with MariaDB, Redis, KodOffice and Imaginary
 type: application
-version: 0.10.1
-appVersion: "1.68.10"
+version: 0.10.2
+appVersion: "1.70.03"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/pinclr/kodbox-charts
 icon: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/assets/kodbox.png
@@ -27,8 +27,8 @@ annotations:
     - name: kodbox
       url: https://kodcloud.com
   artifacthub.io/changes: |
-    - kind: fixed
-      description: the db exporter account gains MariaDB's SLAVE MONITOR privilege, so its slave_status scrape no longer errors every scrape
+    - kind: changed
+      description: default app image to kodbox 1.70.03 (security release)
   artifacthub.io/signKey: |
     fingerprint: A0789F533FF3502789281476AA27ACFF8DC3E405
     url: https://raw.githubusercontent.com/pinclr/kodbox-charts/main/signing-key.asc
