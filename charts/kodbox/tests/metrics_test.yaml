@@ -98,10 +98,10 @@ tests:
         equal:
           path: "spec.template.metadata.labels"
           value:
-            helm.sh/chart: kodbox-0.10.1
+            helm.sh/chart: kodbox-0.10.2
             app.kubernetes.io/name: kodbox
             app.kubernetes.io/instance: kodbox
-            app.kubernetes.io/version: "1.68.10"
+            app.kubernetes.io/version: "1.70.03"
             app.kubernetes.io/managed-by: Helm
             app.kubernetes.io/component: db-metrics-job
       - documentSelector: {path: kind, value: Job}
