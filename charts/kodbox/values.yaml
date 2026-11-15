@@ -709,7 +709,7 @@ milvus:
       # Official Milvus image, newest 2.6 release.
       registry: docker.io
       repository: milvusdb/milvus
-      tag: v2.6.25
+      tag: v2.6.27
       digest: ""
       pullPolicy: IfNotPresent
     mqType: woodpecker
