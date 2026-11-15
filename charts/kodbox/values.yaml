@@ -363,7 +363,7 @@ redis:
     # written with: Redis can't always read newer AOF/RDB files.
     registry: docker.io
     repository: library/redis
-    tag: 8.10.2-alpine
+    tag: 8.10.3-alpine
     digest: ""
     pullPolicy: IfNotPresent
   # Append-only file so sessions survive redis restarts.
