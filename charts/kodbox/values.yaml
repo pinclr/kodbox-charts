@@ -600,7 +600,7 @@ milvus:
       # Official etcd image, newest patch of the 3.5 line Milvus tests with.
       registry: quay.io
       repository: coreos/etcd
-      tag: v3.5.34
+      tag: v3.5.36
       digest: ""
       pullPolicy: IfNotPresent
     env:
