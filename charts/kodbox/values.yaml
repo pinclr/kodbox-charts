@@ -651,7 +651,7 @@ milvus:
     image:
       registry: docker.io
       repository: rustfs/rustfs
-      tag: 1.0.1
+      tag: 1.0.7
       digest: ""
       pullPolicy: IfNotPresent
     # RustFS access key and secret key (Milvus uses the same credentials).
